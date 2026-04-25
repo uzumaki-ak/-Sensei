@@ -1,0 +1,210 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String           @id @default(uuid())
+  clerkUserId     String           @unique
+  email           String           @unique
+  name            String?
+  imageUrl        String?
+  industry        String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  bio             String?
+  experience      Int?
+  skills          String[]
+  gmailToken      Json?
+  telegramChatId  String?
+  personas        Json?
+  assessments     Assessment[]
+  coverLetter     CoverLetter[]
+  jobApplications JobApplication[]
+  resumes         Resume[]         @relation("UserResumes")
+  interviewHistories InterviewHistory[]
+  primaryResumeId String?          @unique
+  resume          Resume?          @relation("UserPrimaryResume", fields: [primaryResumeId], references: [id])
+  industryInsight IndustryInsight? @relation(fields: [industry], references: [industry])
+  githubAnalyses  GithubAnalysisHistory[]
+}
+
+model Assessment {
+  id             String   @id @default(cuid())
+  userId         String
+  category       String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  improvementTip String?
+  questions      Json[]
+  quizScore      Float
+  user           User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model Resume {
+  id              String           @id @default(cuid())
+  userId          String
+  name            String           @default("My Resume")
+  type            String?          // e.g., "AI Engineer", "Web Developer", "App Developer", "Blockchain"
+  content         String
+  atsScore        Float?
+  feedback        String?
+  isDefault       Boolean          @default(false)
+  skills          String[]         // Extracted skills from resume
+  experience      String?          // Brief summary of experience
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  user            User             @relation("UserResumes", fields: [userId], references: [id], onDelete: Cascade)
+  primaryFor      User?            @relation("UserPrimaryResume")
+  jobApplications JobApplication[]
+
+  @@index([userId])
+}
+
+model CoverLetter {
+  id             String   @id @default(cuid())
+  userId         String
+  content        String
+  jobDescription String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  companyName    String
+  jobTitle       String
+  status         String   @default("draft")
+  user           User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model IndustryInsight {
+  id                String   @id @default(cuid())
+  industry          String   @unique
+  salaryRanges      Json[]
+  growthRate        Float
+  demandLevel       String
+  topSkills         String[]
+  marketOutlook     String
+  keyTrends         String[]
+  recommendedSkills String[]
+  lastUpdated       DateTime @default(now())
+  nextUpdate        DateTime
+  users             User[]
+
+  @@index([industry])
+}
+
+model JobListing {
+  id             String           @id @default(cuid())
+  title          String
+  company        String
+  description    String?
+  sourceLink     String
+  techStack      String[]
+  recruiterEmail String?
+  scrapedAt      DateTime         @default(now())
+  applications   JobApplication[]
+  interviewHistories InterviewHistory[]
+}
+
+model JobApplication {
+  id             String     @id @default(cuid())
+  userId         String
+  jobId          String
+  status         String     @default("Discovered")
+  appliedAt      DateTime?
+  draftEmail     String?
+  emailSent      Boolean    @default(false)
+  emailSentAt    DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  attachmentId   String?
+  attachmentName String?
+  resumeId       String?    // The resume used for this application
+  resume         Resume?    @relation(fields: [resumeId], references: [id])
+  job            JobListing @relation(fields: [jobId], references: [id])
+  user           User       @relation(fields: [userId], references: [id])
+  githubAnalyses GithubAnalysisHistory[]
+
+  @@index([userId])
+  @@index([jobId])
+  @@index([resumeId])
+}
+
+model ResumeAttachment {
+  id            String   @id @default(cuid())
+  userId        String
+  applicationId String
+  fileName      String
+  fileType      String
+  fileSize      Int
+  fileData      String
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+  @@index([applicationId])
+}
+
+model ResumeChat {
+  id            String   @id @default(cuid())
+  resumeId      String
+  userId        String
+  role          String   // "user" or "assistant"
+  content       String
+  createdAt     DateTime @default(now())
+
+  @@index([resumeId])
+  @@index([userId])
+}
+
+model InterviewHistory {
+  id            String   @id @default(cuid())
+  userId        String
+  jobId         String
+  createdAt     DateTime @default(now())
+  projectContext String
+  qaPairs       InterviewQA[]
+
+  job           JobListing @relation(fields: [jobId], references: [id])
+  user          User       @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([jobId])
+}
+
+model InterviewQA {
+  id                 String   @id @default(cuid())
+  interviewHistoryId String
+  question           String
+  userAnswer         String
+  idealAnswer        String
+  score              Int
+  feedback           String
+
+  interviewHistory   InterviewHistory @relation(fields: [interviewHistoryId], references: [id], onDelete: Cascade)
+
+  @@index([interviewHistoryId])
+}
+
+model GithubAnalysisHistory {
+  id                   String   @id @default(cuid())
+  userId               String
+  applicationId        String
+  repoUrl              String
+  missingSkills        String[]
+  projectPlanMarkdown  String
+  resumeRecommendation String
+  createdAt            DateTime @default(now())
+
+  user                 User           @relation(fields: [userId], references: [id])
+  application          JobApplication @relation(fields: [applicationId], references: [id])
+
+  @@index([userId])
+  @@index([applicationId])
+}
+
