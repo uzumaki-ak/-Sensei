@@ -1,8 +1,7 @@
 "use client";
 
 import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { useSearchParams } from "next/navigation";
 import { useJobsData } from "@/hooks/use-jobs-data";
 import {
   getPersonalChatMessages,
@@ -14,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import ChatMarkdown from "@/components/chat-markdown";
 import { Loader2, MessageCircleCode, Clock4, Plus } from "lucide-react";
 import { toast } from "sonner";
 
@@ -26,6 +26,7 @@ const HELP_SUGGESTIONS = [
 ];
 
 function PersonalChatbotContent() {
+  const searchParams = useSearchParams();
   const { applications, loading: jobsLoading } = useJobsData();
   const [selectedJobId, setSelectedJobId] = useState("__general__");
   const [sessions, setSessions] = useState([]);
@@ -35,7 +36,7 @@ function PersonalChatbotContent() {
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
-  const [helpOpen, setHelpOpen] = useState(true);
+  const [warningText, setWarningText] = useState("");
   const sendLockRef = useRef(false);
 
   const selectedJobLabel = useMemo(() => {
@@ -52,6 +53,7 @@ function PersonalChatbotContent() {
         toast.error(result.error || "Failed to load chat sessions.");
         return;
       }
+      setWarningText(result.warning || "");
 
       const nextSessions = result.sessions || [];
       setSessions(nextSessions);
@@ -80,6 +82,7 @@ function PersonalChatbotContent() {
         toast.error(result.error || "Failed to load chat messages.");
         return;
       }
+      setWarningText(result.warning || "");
       setMessages(result.messages || []);
     } catch {
       toast.error("Failed to load chat messages.");
@@ -96,6 +99,12 @@ function PersonalChatbotContent() {
   useEffect(() => {
     loadMessages(activeSessionId);
   }, [activeSessionId]);
+
+  useEffect(() => {
+    const prefill = String(searchParams?.get("q") || "").trim();
+    if (!prefill) return;
+    setInput(prefill);
+  }, [searchParams]);
 
   const handleNewChat = () => {
     setActiveSessionId(null);
@@ -136,14 +145,25 @@ function PersonalChatbotContent() {
         setMessages((prev) => prev.filter((item) => item.id !== tempUserMessage.id));
         return;
       }
+      setWarningText(result.warning || "");
 
       const nextSessionId = result.session?.id;
       if (nextSessionId) {
         setActiveSessionId(nextSessionId);
         await loadSessions(selectedJobId, nextSessionId);
         await loadMessages(nextSessionId);
+      } else if (result.reply) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: result.reply.id,
+            role: result.reply.role || "assistant",
+            content: result.reply.content || "No response generated.",
+            citations: result.reply.citations || [],
+            createdAt: result.reply.createdAt || new Date().toISOString(),
+          },
+        ]);
       }
-      toast.success("Response ready.");
     } catch {
       toast.error("Failed to send message.");
       setMessages((prev) => prev.filter((item) => item.id !== tempUserMessage.id));
@@ -243,6 +263,12 @@ function PersonalChatbotContent() {
               <CardDescription>{selectedJobLabel}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {warningText ? (
+                <div className="rounded-sm border border-destructive/40 bg-destructive/10 p-3">
+                  <p className="text-xs text-destructive">{warningText}</p>
+                </div>
+              ) : null}
+
               <div className="max-h-[540px] space-y-3 overflow-y-auto rounded-sm border border-border/70 p-3">
                 {messagesLoading ? (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -270,11 +296,7 @@ function PersonalChatbotContent() {
                           {message.role === "assistant" ? "Copilot" : "You"}
                         </p>
                         {message.role === "assistant" ? (
-                          <div className="prose prose-sm max-w-none dark:prose-invert">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                              {message.content}
-                            </ReactMarkdown>
-                          </div>
+                          <ChatMarkdown content={message.content} className="text-sm" />
                         ) : (
                           <p className="whitespace-pre-wrap text-sm">{message.content}</p>
                         )}
@@ -298,6 +320,19 @@ function PersonalChatbotContent() {
                     </div>
                   ))
                 )}
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {HELP_SUGGESTIONS.map((question, index) => (
+                  <button
+                    key={`help-inline-${index}`}
+                    type="button"
+                    className="rounded-sm border border-border/60 px-2 py-1.5 text-left text-xs hover:bg-muted/40"
+                    onClick={() => setInput(question)}
+                  >
+                    {question}
+                  </button>
+                ))}
               </div>
 
               <form
@@ -327,41 +362,6 @@ function PersonalChatbotContent() {
             </CardContent>
           </Card>
         </div>
-      </div>
-
-      <div className="fixed bottom-5 right-5 z-50">
-        {helpOpen ? (
-          <div className="mb-2 w-[300px] rounded-sm border border-border/70 bg-background/95 p-3 shadow-lg backdrop-blur">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Having trouble? Ask me anything.
-            </p>
-            <div className="mt-2 space-y-1.5">
-              {HELP_SUGGESTIONS.map((question, index) => (
-                <button
-                  key={`help-${index}`}
-                  type="button"
-                  className="w-full rounded-sm border border-border/60 px-2 py-1.5 text-left text-xs hover:bg-muted/40"
-                  onClick={() => {
-                    setInput(question);
-                    setHelpOpen(false);
-                  }}
-                >
-                  {question}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        <Button
-          type="button"
-          size="icon"
-          className="h-12 w-12 rounded-full shadow-lg"
-          onClick={() => setHelpOpen((current) => !current)}
-          title="Toggle quick help"
-        >
-          <MessageCircleCode className="h-5 w-5" />
-        </Button>
       </div>
     </div>
   );

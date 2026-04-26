@@ -207,6 +207,26 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      <footer className="w-full border-t border-border/60 bg-background py-8">
+        <div className="container mx-auto flex flex-col gap-3 px-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between md:px-6">
+          <p>AI Career Coach</p>
+          <div className="flex flex-wrap items-center gap-4">
+            <Link className="hover:text-foreground" href="/privacy-policy">
+              Privacy Policy
+            </Link>
+            <Link className="hover:text-foreground" href="/terms-of-service">
+              Terms of Service
+            </Link>
+            <Link className="hover:text-foreground" href="/data-deletion">
+              Data Deletion
+            </Link>
+            <Link className="hover:text-foreground" href="/support">
+              Support
+            </Link>
+          </div>
+        </div>
+      </footer>
     </>
   );
 }

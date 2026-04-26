@@ -130,17 +130,17 @@ async function getCurrentUser() {
   return user;
 }
 
-function assertPersonalChatModelsReady() {
+function getPersonalChatModelState() {
   const sessionReady =
     db.personalChatSession && typeof db.personalChatSession.findMany === "function";
   const messageReady =
     db.personalChatMessage && typeof db.personalChatMessage.findMany === "function";
 
-  if (!sessionReady || !messageReady) {
-    throw new Error(
-      "Personal chatbot DB models are not ready yet. Run `npx prisma migrate deploy && npx prisma generate`, then restart dev server."
-    );
-  }
+  return {
+    ready: Boolean(sessionReady && messageReady),
+    warning:
+      "Personal chatbot DB models are not ready yet. Run `npx prisma migrate deploy && npx prisma generate`, then restart dev server.",
+  };
 }
 
 async function buildPersonalSources(userId, applicationId = null) {
@@ -360,7 +360,16 @@ async function buildPersonalSources(userId, applicationId = null) {
 
 export async function getPersonalChatSessions(applicationId = null) {
   try {
-    assertPersonalChatModelsReady();
+    const modelState = getPersonalChatModelState();
+    if (!modelState.ready) {
+      return {
+        success: true,
+        sessions: [],
+        warning: modelState.warning,
+        modelsReady: false,
+      };
+    }
+
     const user = await getCurrentUser();
     const sessions = await db.personalChatSession.findMany({
       where: {
@@ -394,6 +403,7 @@ export async function getPersonalChatSessions(applicationId = null) {
           ? `${session.application.job.company} - ${session.application.job.title}`
           : "General",
       })),
+      modelsReady: true,
     };
   } catch (error) {
     console.error("[Personal Chat Sessions Error]:", error);
@@ -406,7 +416,17 @@ export async function getPersonalChatSessions(applicationId = null) {
 
 export async function getPersonalChatMessages(sessionId) {
   try {
-    assertPersonalChatModelsReady();
+    const modelState = getPersonalChatModelState();
+    if (!modelState.ready) {
+      return {
+        success: true,
+        session: null,
+        messages: [],
+        warning: modelState.warning,
+        modelsReady: false,
+      };
+    }
+
     const user = await getCurrentUser();
     if (!sessionId) throw new Error("Session id is required.");
 
@@ -453,6 +473,7 @@ export async function getPersonalChatMessages(sessionId) {
         citations: message.citations || [],
         createdAt: message.createdAt,
       })),
+      modelsReady: true,
     };
   } catch (error) {
     console.error("[Personal Chat Messages Error]:", error);
@@ -465,7 +486,7 @@ export async function getPersonalChatMessages(sessionId) {
 
 export async function sendPersonalChatMessage(payload = {}) {
   try {
-    assertPersonalChatModelsReady();
+    const modelState = getPersonalChatModelState();
     const user = await getCurrentUser();
     const cleanMessage = normalizeText(payload?.message, 2000);
     if (!cleanMessage) throw new Error("Message is required.");
@@ -473,36 +494,38 @@ export async function sendPersonalChatMessage(payload = {}) {
     let session = null;
     const selectedApplicationId = payload?.applicationId || null;
 
-    if (payload?.sessionId) {
-      session = await db.personalChatSession.findFirst({
-        where: {
-          id: payload.sessionId,
-          userId: user.id,
-        },
-      });
-      if (!session) throw new Error("Chat session not found.");
-    } else {
-      session = await db.personalChatSession.create({
+    if (modelState.ready) {
+      if (payload?.sessionId) {
+        session = await db.personalChatSession.findFirst({
+          where: {
+            id: payload.sessionId,
+            userId: user.id,
+          },
+        });
+        if (!session) throw new Error("Chat session not found.");
+      } else {
+        session = await db.personalChatSession.create({
+          data: {
+            userId: user.id,
+            applicationId: selectedApplicationId,
+            title: cleanMessage.slice(0, 72),
+          },
+        });
+      }
+
+      await db.personalChatMessage.create({
         data: {
+          sessionId: session.id,
           userId: user.id,
-          applicationId: selectedApplicationId,
-          title: cleanMessage.slice(0, 72),
+          role: "user",
+          content: cleanMessage,
         },
       });
     }
 
-    await db.personalChatMessage.create({
-      data: {
-        sessionId: session.id,
-        userId: user.id,
-        role: "user",
-        content: cleanMessage,
-      },
-    });
-
     const { sources, jobLabel } = await buildPersonalSources(
       user.id,
-      session.applicationId || selectedApplicationId
+      session?.applicationId || selectedApplicationId
     );
 
     const queryTokens = tokenize(cleanMessage);
@@ -516,7 +539,7 @@ export async function sendPersonalChatMessage(payload = {}) {
 
     const contextBlock = buildContextBlock(relevant);
     const prompt = buildUserTextPrompt(
-      "You are a personal career copilot. Use only provided context. Never fabricate details. If context is missing, clearly state what is missing and ask a focused follow-up question. Keep answers structured and actionable. Cite source ids like [S1], [S2].",
+      "You are a personal career copilot. Use only provided context. Never fabricate details. If context is missing, clearly state what is missing and ask a focused follow-up question. Keep answers structured and actionable using short headings and bullet points. Avoid markdown tables unless the user explicitly asks for a table. Cite source ids like [S1], [S2].",
       `Selected context: ${jobLabel}\n\nUser question:\n${cleanMessage}\n\nKnowledge context:\n${contextBlock}`
     );
 
@@ -542,39 +565,48 @@ export async function sendPersonalChatMessage(payload = {}) {
       })
       .filter(Boolean);
 
-    const assistant = await db.personalChatMessage.create({
-      data: {
-        sessionId: session.id,
-        userId: user.id,
-        role: "assistant",
-        content: generated.text,
-        citations,
-      },
-    });
+    let assistant = null;
+    if (modelState.ready && session) {
+      assistant = await db.personalChatMessage.create({
+        data: {
+          sessionId: session.id,
+          userId: user.id,
+          role: "assistant",
+          content: generated.text,
+          citations,
+        },
+      });
 
-    await db.personalChatSession.update({
-      where: { id: session.id },
-      data: {
-        updatedAt: new Date(),
-        title: session.title || cleanMessage.slice(0, 72),
-      },
-    });
+      await db.personalChatSession.update({
+        where: { id: session.id },
+        data: {
+          updatedAt: new Date(),
+          title: session.title || cleanMessage.slice(0, 72),
+        },
+      });
+    }
+
+    const replyId = assistant?.id || `transient-${Date.now()}`;
+    const replyCreatedAt = assistant?.createdAt || new Date();
 
     return {
       success: true,
       session: {
-        id: session.id,
-        title: session.title || cleanMessage.slice(0, 72),
-        applicationId: session.applicationId || selectedApplicationId,
+        id: session?.id || null,
+        title: session?.title || cleanMessage.slice(0, 72),
+        applicationId: session?.applicationId || selectedApplicationId,
       },
       reply: {
-        id: assistant.id,
-        role: assistant.role,
-        content: assistant.content,
-        citations: assistant.citations || [],
-        createdAt: assistant.createdAt,
+        id: replyId,
+        role: "assistant",
+        content: generated.text,
+        citations,
+        createdAt: replyCreatedAt,
       },
       providerTrace: generated.trace || [],
+      modelsReady: modelState.ready,
+      warning: modelState.ready ? null : modelState.warning,
+      transient: !modelState.ready,
     };
   } catch (error) {
     console.error("[Personal Chat Send Error]:", error);

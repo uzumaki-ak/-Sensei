@@ -607,7 +607,12 @@ export async function runMyNightlyHunt() {
       const botToken = process.env.TELEGRAM_BOT_TOKEN;
       if (botToken) {
           const telegramApiUrl = `https://api.telegram.org/bot${botToken}/sendMessage`;
-          const messageText = `🎯 <b>Sniper Alert!</b>\\n\\nI just found <b>${result.totals.createdApplications}</b> new jobs that perfectly match your profile.\\n\\nCheck your Kanban board now!`;
+          const messageText = [
+            "<b>Sniper Alert</b>",
+            "",
+            `Found <b>${result.totals.createdApplications}</b> new matching job(s).`,
+            "Open your Kanban board now.",
+          ].join("\n");
           
           try {
             await fetch(telegramApiUrl, {

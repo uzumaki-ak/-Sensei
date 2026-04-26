@@ -1,6 +1,7 @@
 import React from "react";
 import Sidebar from "@/components/sidebar";
 import AppTopbar from "@/components/app-topbar";
+import GlobalHelpBubble from "@/components/global-help-bubble";
 
 const MainLayout = async ({ children }) => {
   return (
@@ -11,6 +12,7 @@ const MainLayout = async ({ children }) => {
         <main className="pb-10 pt-4 md:pt-6">
           <div className="mx-auto w-full max-w-[1600px] px-4 md:px-8">{children}</div>
         </main>
+        <GlobalHelpBubble />
       </div>
     </div>
   );
