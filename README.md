@@ -39,3 +39,48 @@ HUNT_MIN_CREATED_BEFORE_FALLBACK=2
 HUNT_MAX_FALLBACK_PER_QUERY=5
 JOB_SOURCE_TIMEOUT_MS=12000
 ```
+
+## Personal DB Chatbot
+
+Route: `/advanced/personal-chatbot`
+
+What it does:
+- Answers from the signed-in user's own DB context (profile, resumes, jobs, and tool histories).
+- Includes a built-in feature handbook so recruiters can ask: what each feature does, use cases, and test steps.
+- Shows assistant citations (`[S1]`, `[S2]`) for traceability.
+
+Suggested demo questions:
+- `What does each advanced feature do and how should I test it?`
+- `Give me a 3-minute recruiter walkthrough script for this platform.`
+- `Based on my data, which project story is best for this selected role?`
+
+## Docker Deploy
+
+The repo includes:
+- `Dockerfile` (Next.js standalone production image + Prisma migrate on startup)
+- `docker-compose.yml` (app + postgres)
+
+### 1) Build and run
+
+```bash
+docker compose up --build
+```
+
+App:
+- http://localhost:3000
+
+Postgres (compose default):
+- host: `localhost`
+- port: `5432`
+- user: `postgres`
+- password: `postgres`
+- db: `ai_career_coach`
+
+### 2) Environment
+
+Add your required env vars in `.env` (Clerk + AI provider keys at minimum).  
+If you want to use the compose postgres, set:
+
+```bash
+DATABASE_URL=postgresql://postgres:postgres@db:5432/ai_career_coach?schema=public
+```

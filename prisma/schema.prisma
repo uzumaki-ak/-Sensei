@@ -36,6 +36,12 @@ model User {
   dripCampaignHistories DripCampaignHistory[]
   offerCopilotHistories OfferCopilotHistory[]
   interviewMeetRooms InterviewMeetRoom[]
+  ragKnowledgeChunks  RagKnowledgeChunk[]
+  ragQueryHistories   RagQueryHistory[]
+  multiAgentRuns      MultiAgentRun[]
+  promptEvalRuns      PromptEvalRun[]
+  personalChatSessions PersonalChatSession[]
+  personalChatMessages PersonalChatMessage[]
 }
 
 model Assessment {
@@ -140,6 +146,11 @@ model JobApplication {
   dripCampaignHistories DripCampaignHistory[]
   offerCopilotHistories OfferCopilotHistory[]
   interviewMeetRooms InterviewMeetRoom[]
+  ragKnowledgeChunks  RagKnowledgeChunk[]
+  ragQueryHistories   RagQueryHistory[]
+  multiAgentRuns      MultiAgentRun[]
+  promptEvalRuns      PromptEvalRun[]
+  personalChatSessions PersonalChatSession[]
 
   @@index([userId])
   @@index([jobId])
@@ -322,4 +333,116 @@ model InterviewMeetTurn {
 
   @@index([roomId])
   @@index([role])
+}
+
+model RagKnowledgeChunk {
+  id          String   @id @default(cuid())
+  userId      String
+  applicationId String?
+  sourceType  String
+  sourceLabel String
+  chunkText   String
+  embedding   Json
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  user        User            @relation(fields: [userId], references: [id])
+  application JobApplication? @relation(fields: [applicationId], references: [id])
+
+  @@index([userId])
+  @@index([applicationId])
+  @@index([sourceType])
+}
+
+model RagQueryHistory {
+  id              String   @id @default(cuid())
+  userId          String
+  applicationId   String?
+  question        String
+  answer          String
+  citations       Json?
+  retrievedChunks Json?
+  providerTrace   Json?
+  createdAt       DateTime @default(now())
+
+  user            User            @relation(fields: [userId], references: [id])
+  application     JobApplication? @relation(fields: [applicationId], references: [id])
+
+  @@index([userId])
+  @@index([applicationId])
+  @@index([createdAt])
+}
+
+model MultiAgentRun {
+  id               String   @id @default(cuid())
+  userId           String
+  applicationId    String?
+  goal             String
+  researcherOutput String
+  plannerOutput    String
+  reviewerOutput   String
+  finalOutput      String
+  providerTrace    Json?
+  createdAt        DateTime @default(now())
+
+  user             User            @relation(fields: [userId], references: [id])
+  application      JobApplication? @relation(fields: [applicationId], references: [id])
+
+  @@index([userId])
+  @@index([applicationId])
+  @@index([createdAt])
+}
+
+model PromptEvalRun {
+  id            String   @id @default(cuid())
+  userId        String
+  applicationId String?
+  task          String
+  variants      Json
+  outputs       Json
+  scores        Json
+  winnerIndex   Int?
+  judgeTrace    Json?
+  createdAt     DateTime @default(now())
+
+  user          User            @relation(fields: [userId], references: [id])
+  application   JobApplication? @relation(fields: [applicationId], references: [id])
+
+  @@index([userId])
+  @@index([applicationId])
+  @@index([createdAt])
+}
+
+model PersonalChatSession {
+  id            String   @id @default(cuid())
+  userId        String
+  applicationId String?
+  title         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user          User            @relation(fields: [userId], references: [id])
+  application   JobApplication? @relation(fields: [applicationId], references: [id])
+  messages      PersonalChatMessage[]
+
+  @@index([userId])
+  @@index([applicationId])
+  @@index([updatedAt])
+}
+
+model PersonalChatMessage {
+  id         String   @id @default(cuid())
+  sessionId  String
+  userId     String
+  role       String
+  content    String
+  citations  Json?
+  createdAt  DateTime @default(now())
+
+  session    PersonalChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user       User                @relation(fields: [userId], references: [id])
+
+  @@index([sessionId])
+  @@index([userId])
+  @@index([createdAt])
 }

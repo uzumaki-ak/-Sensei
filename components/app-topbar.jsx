@@ -24,6 +24,11 @@ import {
   MessageSquare,
   Bot,
   X,
+  Database,
+  Workflow,
+  FlaskConical,
+  History,
+  MessageCircleCode,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 
@@ -43,6 +48,11 @@ const PAGE_LABELS = {
   "/advanced/offer-copilot": "Offer Copilot",
   "/advanced/interview-simulator": "Interview Simulator",
   "/advanced/telegram-sniper": "Telegram Sniper",
+  "/advanced/rag-copilot": "RAG Copilot",
+  "/advanced/multi-agent-studio": "Multi-Agent Studio",
+  "/advanced/prompt-eval-lab": "Prompt Eval Lab",
+  "/advanced/event-timeline": "Event Timeline",
+  "/advanced/personal-chatbot": "Personal Chatbot",
   "/meet": "Join Interview Room",
 };
 
@@ -73,6 +83,11 @@ const MOBILE_NAV_SECTIONS = [
       { href: "/advanced/offer-copilot", label: "Offer Copilot", icon: Scale },
       { href: "/advanced/interview-simulator", label: "Interview Simulator", icon: MessageSquare },
       { href: "/advanced/telegram-sniper", label: "Telegram Sniper", icon: Bot },
+      { href: "/advanced/rag-copilot", label: "RAG Copilot", icon: Database },
+      { href: "/advanced/multi-agent-studio", label: "Multi-Agent Studio", icon: Workflow },
+      { href: "/advanced/prompt-eval-lab", label: "Prompt Eval Lab", icon: FlaskConical },
+      { href: "/advanced/event-timeline", label: "Event Timeline", icon: History },
+      { href: "/advanced/personal-chatbot", label: "Personal Chatbot", icon: MessageCircleCode },
     ],
   },
 ];
@@ -92,6 +107,11 @@ function getRouteKey(pathname) {
   if (pathname.startsWith("/advanced/offer-copilot")) return "advanced-offer-copilot";
   if (pathname.startsWith("/advanced/interview-simulator")) return "advanced-interview-simulator";
   if (pathname.startsWith("/advanced/telegram-sniper")) return "advanced-telegram-sniper";
+  if (pathname.startsWith("/advanced/rag-copilot")) return "advanced-rag-copilot";
+  if (pathname.startsWith("/advanced/multi-agent-studio")) return "advanced-multi-agent-studio";
+  if (pathname.startsWith("/advanced/prompt-eval-lab")) return "advanced-prompt-eval-lab";
+  if (pathname.startsWith("/advanced/event-timeline")) return "advanced-event-timeline";
+  if (pathname.startsWith("/advanced/personal-chatbot")) return "advanced-personal-chatbot";
   if (pathname.startsWith("/meet")) return "meet";
   return "workspace";
 }

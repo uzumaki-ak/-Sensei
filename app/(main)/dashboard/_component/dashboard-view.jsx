@@ -113,9 +113,15 @@ const DashboardView = ({ insights, activity }) => {
                 (totals.companyIntelCount || 0) +
                 (totals.dripCampaignCount || 0) +
                 (totals.offerCopilotCount || 0) +
+                (totals.ragQueryCount || 0) +
+                (totals.multiAgentRunCount || 0) +
+                (totals.promptEvalRunCount || 0) +
+                (totals.personalChatSessionCount || 0) +
                 (totals.coverLetterCount || 0)}
             </div>
-            <p className="text-xs text-muted-foreground">Intel, drip, offer copilot, reverse recruiter, GitHub, cover letters</p>
+            <p className="text-xs text-muted-foreground">
+              Intel, drip, offer, RAG, multi-agent, eval, personal chat, recruiter, GitHub, cover letters
+            </p>
           </CardContent>
         </Card>
 
@@ -158,6 +164,11 @@ const DashboardView = ({ insights, activity }) => {
             { href: "/advanced/company-intel", label: "Company Intel", value: totals.companyIntelCount || 0 },
             { href: "/advanced/drip-campaigns", label: "Drip Campaigns", value: totals.dripCampaignCount || 0 },
             { href: "/advanced/offer-copilot", label: "Offer Copilot", value: totals.offerCopilotCount || 0 },
+            { href: "/advanced/rag-copilot", label: "RAG Copilot", value: totals.ragQueryCount || 0 },
+            { href: "/advanced/multi-agent-studio", label: "Multi-Agent Studio", value: totals.multiAgentRunCount || 0 },
+            { href: "/advanced/prompt-eval-lab", label: "Prompt Eval Lab", value: totals.promptEvalRunCount || 0 },
+            { href: "/advanced/personal-chatbot", label: "Personal Chatbot", value: totals.personalChatSessionCount || 0 },
+            { href: "/advanced/event-timeline", label: "Event Timeline", value: (totals.pipelineCount || 0) + (totals.meetRoomCount || 0) },
             { href: "/interview", label: "Interview Prep Quizzes", value: totals.interviewPracticeCount || 0 },
             { href: "/ai-cover-letter", label: "Cover Letters", value: totals.coverLetterCount || 0 },
             { href: "/resume", label: "Resumes", value: totals.resumeCount || 0 },

@@ -84,6 +84,10 @@ export async function getToolActivitySummary() {
     companyIntelCount,
     dripCampaignCount,
     offerCopilotCount,
+    ragQueryCount,
+    multiAgentRunCount,
+    promptEvalRunCount,
+    personalChatSessionCount,
     interviewPracticeCount,
     meetRoomCount,
     meetCompletedCount,
@@ -99,13 +103,17 @@ export async function getToolActivitySummary() {
     db.companyIntelHistory.count({ where: { userId: user.id } }),
     db.dripCampaignHistory.count({ where: { userId: user.id } }),
     db.offerCopilotHistory.count({ where: { userId: user.id } }),
+    db.ragQueryHistory.count({ where: { userId: user.id } }),
+    db.multiAgentRun.count({ where: { userId: user.id } }),
+    db.promptEvalRun.count({ where: { userId: user.id } }),
+    db.personalChatSession.count({ where: { userId: user.id } }),
     db.interviewHistory.count({ where: { userId: user.id } }),
     db.interviewMeetRoom.count({ where: { ownerUserId: user.id } }),
     db.interviewMeetRoom.count({
       where: { ownerUserId: user.id, status: "COMPLETED" },
     }),
     db.interviewMeetRoom.count({
-      where: { ownerUserId: user.id, evaluatedAt: { not: null } },
+      where: { ownerUserId: user.id, status: "COMPLETED" },
     }),
     db.coverLetter.count({ where: { userId: user.id } }),
     db.resume.count({ where: { userId: user.id } }),
@@ -117,8 +125,6 @@ export async function getToolActivitySummary() {
         code: true,
         status: true,
         createdAt: true,
-        evaluatedAt: true,
-        evaluation: true,
         application: {
           select: {
             job: {
@@ -136,19 +142,14 @@ export async function getToolActivitySummary() {
   ]);
 
   const recentScorecards = recentMeetRooms.map((room) => {
-    const evaluation = room.evaluation || {};
     return {
       id: room.id,
       code: room.code,
       status: room.status,
       createdAt: room.createdAt,
-      evaluatedAt: room.evaluatedAt,
       company: room.application?.job?.company || "Unknown",
       role: room.application?.job?.title || "Unknown role",
-      overallScore:
-        typeof evaluation?.overallScore === "number"
-          ? evaluation.overallScore
-          : null,
+      overallScore: null,
     };
   });
 
@@ -160,6 +161,10 @@ export async function getToolActivitySummary() {
       companyIntelCount,
       dripCampaignCount,
       offerCopilotCount,
+      ragQueryCount,
+      multiAgentRunCount,
+      promptEvalRunCount,
+      personalChatSessionCount,
       interviewPracticeCount,
       meetRoomCount,
       meetCompletedCount,

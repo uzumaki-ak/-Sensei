@@ -18,6 +18,11 @@ import {
   MessageSquare,
   Bot,
   Circle,
+  Database,
+  Workflow,
+  FlaskConical,
+  History,
+  MessageCircleCode,
 } from "lucide-react";
 import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs";
 import GmailConnectButton from "./gmail-connect-button";
@@ -137,6 +142,40 @@ export default async function Sidebar() {
             <Button variant="ghost" className="w-full justify-start gap-3 px-2.5">
               <Bot className="h-4.5 w-4.5" />
               Telegram Sniper
+            </Button>
+          </Link>
+
+          <div className="mb-3 mt-7 px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            Platform Labs
+          </div>
+          <Link href="/advanced/rag-copilot">
+            <Button variant="ghost" className="w-full justify-start gap-3 px-2.5">
+              <Database className="h-4.5 w-4.5" />
+              RAG Copilot
+            </Button>
+          </Link>
+          <Link href="/advanced/multi-agent-studio">
+            <Button variant="ghost" className="w-full justify-start gap-3 px-2.5">
+              <Workflow className="h-4.5 w-4.5" />
+              Multi-Agent Studio
+            </Button>
+          </Link>
+          <Link href="/advanced/prompt-eval-lab">
+            <Button variant="ghost" className="w-full justify-start gap-3 px-2.5">
+              <FlaskConical className="h-4.5 w-4.5" />
+              Prompt Eval Lab
+            </Button>
+          </Link>
+          <Link href="/advanced/event-timeline">
+            <Button variant="ghost" className="w-full justify-start gap-3 px-2.5">
+              <History className="h-4.5 w-4.5" />
+              Event Timeline
+            </Button>
+          </Link>
+          <Link href="/advanced/personal-chatbot">
+            <Button variant="ghost" className="w-full justify-start gap-3 px-2.5">
+              <MessageCircleCode className="h-4.5 w-4.5" />
+              Personal Chatbot
             </Button>
           </Link>
         </SignedIn>
