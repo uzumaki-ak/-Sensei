@@ -77,6 +77,11 @@ export async function getToolActivitySummary() {
   });
   if (!user) throw new Error("User not found");
 
+  const personalChatSessionCountPromise =
+    db.personalChatSession && typeof db.personalChatSession.count === "function"
+      ? db.personalChatSession.count({ where: { userId: user.id } })
+      : Promise.resolve(0);
+
   const [
     pipelineCount,
     reverseRecruiterCount,
@@ -106,7 +111,7 @@ export async function getToolActivitySummary() {
     db.ragQueryHistory.count({ where: { userId: user.id } }),
     db.multiAgentRun.count({ where: { userId: user.id } }),
     db.promptEvalRun.count({ where: { userId: user.id } }),
-    db.personalChatSession.count({ where: { userId: user.id } }),
+    personalChatSessionCountPromise,
     db.interviewHistory.count({ where: { userId: user.id } }),
     db.interviewMeetRoom.count({ where: { ownerUserId: user.id } }),
     db.interviewMeetRoom.count({

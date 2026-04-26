@@ -3,6 +3,36 @@
 import { db } from "@/lib/prisma";
 import { auth } from "@clerk/nextjs/server";
 
+const DEFAULT_RETENTION_DAYS = Math.min(
+  30,
+  Math.max(1, Number(process.env.EVENT_TIMELINE_RETENTION_DAYS) || 2)
+);
+
+function resolveRetentionDays(override) {
+  const candidate = Number(override);
+  if (Number.isFinite(candidate) && candidate >= 1) {
+    return Math.min(30, Math.floor(candidate));
+  }
+  return DEFAULT_RETENTION_DAYS;
+}
+
+function buildCutoffDate(retentionDays) {
+  return new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+}
+
+function hasPersonalChatSessionModel() {
+  return Boolean(db.personalChatSession && typeof db.personalChatSession.findMany === "function");
+}
+
+function whereByUser(userField, userId, cutoffDate) {
+  return {
+    [userField]: userId,
+    createdAt: {
+      gte: cutoffDate,
+    },
+  };
+}
+
 async function getCurrentUserId() {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
@@ -15,10 +45,13 @@ async function getCurrentUserId() {
   return user.id;
 }
 
-export async function getEventTimeline(limit = 80) {
+export async function getEventTimeline(limit = 80, retentionDaysOverride = null) {
   try {
     const internalUserId = await getCurrentUserId();
     const take = Math.min(200, Math.max(20, Number(limit) || 80));
+    const retentionDays = resolveRetentionDays(retentionDaysOverride);
+    const cutoffDate = buildCutoffDate(retentionDays);
+    const personalChatSessionAvailable = hasPersonalChatSessionModel();
 
     const [
       reverseRecruiter,
@@ -33,72 +66,77 @@ export async function getEventTimeline(limit = 80) {
       personalChats,
     ] = await Promise.all([
       db.reverseRecruiterHistory.findMany({
-        where: { userId: internalUserId },
+        where: whereByUser("userId", internalUserId, cutoffDate),
         include: { application: { include: { job: true } } },
         orderBy: { createdAt: "desc" },
         take,
       }),
       db.githubAnalysisHistory.findMany({
-        where: { userId: internalUserId },
+        where: whereByUser("userId", internalUserId, cutoffDate),
         include: { application: { include: { job: true } } },
         orderBy: { createdAt: "desc" },
         take,
       }),
       db.companyIntelHistory.findMany({
-        where: { userId: internalUserId },
+        where: whereByUser("userId", internalUserId, cutoffDate),
         include: { application: { include: { job: true } } },
         orderBy: { createdAt: "desc" },
         take,
       }),
       db.dripCampaignHistory.findMany({
-        where: { userId: internalUserId },
+        where: whereByUser("userId", internalUserId, cutoffDate),
         include: { application: { include: { job: true } } },
         orderBy: { createdAt: "desc" },
         take,
       }),
       db.offerCopilotHistory.findMany({
-        where: { userId: internalUserId },
+        where: whereByUser("userId", internalUserId, cutoffDate),
         include: { application: { include: { job: true } } },
         orderBy: { createdAt: "desc" },
         take,
       }),
       db.interviewMeetRoom.findMany({
-        where: { ownerUserId: internalUserId },
+        where: whereByUser("ownerUserId", internalUserId, cutoffDate),
         include: { application: { include: { job: true } } },
         orderBy: { createdAt: "desc" },
         take,
       }),
       db.ragQueryHistory.findMany({
-        where: { userId: internalUserId },
+        where: whereByUser("userId", internalUserId, cutoffDate),
         include: { application: { include: { job: true } } },
         orderBy: { createdAt: "desc" },
         take,
       }),
       db.multiAgentRun.findMany({
-        where: { userId: internalUserId },
+        where: whereByUser("userId", internalUserId, cutoffDate),
         include: { application: { include: { job: true } } },
         orderBy: { createdAt: "desc" },
         take,
       }),
       db.promptEvalRun.findMany({
-        where: { userId: internalUserId },
+        where: whereByUser("userId", internalUserId, cutoffDate),
         include: { application: { include: { job: true } } },
         orderBy: { createdAt: "desc" },
         take,
       }),
-      db.personalChatSession.findMany({
-        where: { userId: internalUserId },
-        include: {
-          application: { include: { job: true } },
-          messages: {
-            where: { role: "assistant" },
-            orderBy: { createdAt: "desc" },
-            take: 1,
-          },
-        },
-        orderBy: { updatedAt: "desc" },
-        take,
-      }),
+      personalChatSessionAvailable
+        ? db.personalChatSession.findMany({
+            where: {
+              userId: internalUserId,
+              createdAt: { gte: cutoffDate },
+            },
+            include: {
+              application: { include: { job: true } },
+              messages: {
+                where: { role: "assistant" },
+                orderBy: { createdAt: "desc" },
+                take: 1,
+              },
+            },
+            orderBy: { updatedAt: "desc" },
+            take,
+          })
+        : Promise.resolve([]),
     ]);
 
     const events = [
@@ -201,12 +239,100 @@ export async function getEventTimeline(limit = 80) {
     return {
       success: true,
       events,
+      meta: {
+        retentionDays,
+        cutoffAt: cutoffDate,
+        personalChatSessionAvailable,
+      },
     };
   } catch (error) {
     console.error("[Event Timeline Error]:", error);
     return {
       success: false,
       error: error.message || "Failed to load event timeline.",
+    };
+  }
+}
+
+export async function purgeOldTimelineData(retentionDaysOverride = null) {
+  try {
+    const internalUserId = await getCurrentUserId();
+    const retentionDays = resolveRetentionDays(retentionDaysOverride);
+    const cutoffDate = buildCutoffDate(retentionDays);
+    const personalChatSessionAvailable = hasPersonalChatSessionModel();
+
+    const [
+      reverseRecruiterDeleted,
+      githubDeleted,
+      companyIntelDeleted,
+      dripDeleted,
+      offerDeleted,
+      meetDeleted,
+      ragDeleted,
+      multiAgentDeleted,
+      promptEvalDeleted,
+      personalChatDeleted,
+    ] = await Promise.all([
+      db.reverseRecruiterHistory.deleteMany({
+        where: { userId: internalUserId, createdAt: { lt: cutoffDate } },
+      }),
+      db.githubAnalysisHistory.deleteMany({
+        where: { userId: internalUserId, createdAt: { lt: cutoffDate } },
+      }),
+      db.companyIntelHistory.deleteMany({
+        where: { userId: internalUserId, createdAt: { lt: cutoffDate } },
+      }),
+      db.dripCampaignHistory.deleteMany({
+        where: { userId: internalUserId, createdAt: { lt: cutoffDate } },
+      }),
+      db.offerCopilotHistory.deleteMany({
+        where: { userId: internalUserId, createdAt: { lt: cutoffDate } },
+      }),
+      db.interviewMeetRoom.deleteMany({
+        where: { ownerUserId: internalUserId, createdAt: { lt: cutoffDate } },
+      }),
+      db.ragQueryHistory.deleteMany({
+        where: { userId: internalUserId, createdAt: { lt: cutoffDate } },
+      }),
+      db.multiAgentRun.deleteMany({
+        where: { userId: internalUserId, createdAt: { lt: cutoffDate } },
+      }),
+      db.promptEvalRun.deleteMany({
+        where: { userId: internalUserId, createdAt: { lt: cutoffDate } },
+      }),
+      personalChatSessionAvailable
+        ? db.personalChatSession.deleteMany({
+            where: { userId: internalUserId, createdAt: { lt: cutoffDate } },
+          })
+        : Promise.resolve({ count: 0 }),
+    ]);
+
+    const deleted = {
+      reverseRecruiter: reverseRecruiterDeleted.count || 0,
+      github: githubDeleted.count || 0,
+      companyIntel: companyIntelDeleted.count || 0,
+      drip: dripDeleted.count || 0,
+      offer: offerDeleted.count || 0,
+      meet: meetDeleted.count || 0,
+      rag: ragDeleted.count || 0,
+      multiAgent: multiAgentDeleted.count || 0,
+      promptEval: promptEvalDeleted.count || 0,
+      personalChat: personalChatDeleted.count || 0,
+    };
+
+    return {
+      success: true,
+      retentionDays,
+      cutoffAt: cutoffDate,
+      personalChatSessionAvailable,
+      deleted,
+      totalDeleted: Object.values(deleted).reduce((sum, value) => sum + value, 0),
+    };
+  } catch (error) {
+    console.error("[Event Timeline Purge Error]:", error);
+    return {
+      success: false,
+      error: error.message || "Failed to purge old timeline events.",
     };
   }
 }

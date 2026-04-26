@@ -130,6 +130,19 @@ async function getCurrentUser() {
   return user;
 }
 
+function assertPersonalChatModelsReady() {
+  const sessionReady =
+    db.personalChatSession && typeof db.personalChatSession.findMany === "function";
+  const messageReady =
+    db.personalChatMessage && typeof db.personalChatMessage.findMany === "function";
+
+  if (!sessionReady || !messageReady) {
+    throw new Error(
+      "Personal chatbot DB models are not ready yet. Run `npx prisma migrate deploy && npx prisma generate`, then restart dev server."
+    );
+  }
+}
+
 async function buildPersonalSources(userId, applicationId = null) {
   const [selectedApplication, recentApplications, resumes, ragRuns, multiAgentRuns, promptEvalRuns, companyIntelRuns, githubRuns] =
     await Promise.all([
@@ -347,6 +360,7 @@ async function buildPersonalSources(userId, applicationId = null) {
 
 export async function getPersonalChatSessions(applicationId = null) {
   try {
+    assertPersonalChatModelsReady();
     const user = await getCurrentUser();
     const sessions = await db.personalChatSession.findMany({
       where: {
@@ -392,6 +406,7 @@ export async function getPersonalChatSessions(applicationId = null) {
 
 export async function getPersonalChatMessages(sessionId) {
   try {
+    assertPersonalChatModelsReady();
     const user = await getCurrentUser();
     if (!sessionId) throw new Error("Session id is required.");
 
@@ -450,6 +465,7 @@ export async function getPersonalChatMessages(sessionId) {
 
 export async function sendPersonalChatMessage(payload = {}) {
   try {
+    assertPersonalChatModelsReady();
     const user = await getCurrentUser();
     const cleanMessage = normalizeText(payload?.message, 2000);
     if (!cleanMessage) throw new Error("Message is required.");

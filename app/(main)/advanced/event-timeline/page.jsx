@@ -2,18 +2,20 @@
 
 import React, { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { getEventTimeline } from "@/actions/event-timeline";
+import { getEventTimeline, purgeOldTimelineData } from "@/actions/event-timeline";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, History, RefreshCw, ArrowUpRight } from "lucide-react";
+import { Loader2, History, RefreshCw, ArrowUpRight, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 function EventTimelineContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isPurging, setIsPurging] = useState(false);
   const [events, setEvents] = useState([]);
+  const [meta, setMeta] = useState(null);
   const [filter, setFilter] = useState("all");
 
   const loadEvents = async (refresh = false) => {
@@ -27,6 +29,7 @@ function EventTimelineContent() {
         return;
       }
       setEvents(result.events || []);
+      setMeta(result.meta || null);
     } catch {
       toast.error("Failed to load timeline.");
     } finally {
@@ -49,6 +52,23 @@ function EventTimelineContent() {
     return events.filter((item) => item.type === filter);
   }, [events, filter]);
 
+  const handlePurge = async () => {
+    setIsPurging(true);
+    try {
+      const result = await purgeOldTimelineData();
+      if (!result.success) {
+        toast.error(result.error || "Failed to purge timeline.");
+        return;
+      }
+      toast.success(`Purged ${result.totalDeleted} old records from timeline sources.`);
+      await loadEvents(true);
+    } catch {
+      toast.error("Failed to purge timeline.");
+    } finally {
+      setIsPurging(false);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center gap-3">
@@ -65,6 +85,22 @@ function EventTimelineContent() {
 
       <Card>
         <CardHeader className="border-b">
+          {meta ? (
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <Badge variant="secondary">
+                Retention: {meta.retentionDays} day{meta.retentionDays > 1 ? "s" : ""}
+              </Badge>
+              <Badge variant="outline">
+                Older than {new Date(meta.cutoffAt).toLocaleString()} may be removed
+              </Badge>
+              {!meta.personalChatSessionAvailable ? (
+                <Badge variant="destructive">
+                  Personal chatbot events unavailable until Prisma client refresh
+                </Badge>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <CardTitle className="text-lg">Timeline Feed</CardTitle>
@@ -89,10 +125,20 @@ function EventTimelineContent() {
                 size="sm"
                 className="gap-2"
                 onClick={() => loadEvents(true)}
-                disabled={isRefreshing}
+                disabled={isRefreshing || isPurging}
               >
                 {isRefreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                 Refresh
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={handlePurge}
+                disabled={isPurging || isRefreshing}
+              >
+                {isPurging ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                Purge Old
               </Button>
             </div>
           </div>
