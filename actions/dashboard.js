@@ -66,3 +66,108 @@ export async function getIndustryInsights() {
 
   return user.industryInsight;
 }
+
+export async function getToolActivitySummary() {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Unauthorized");
+
+  const user = await db.user.findUnique({
+    where: { clerkUserId: userId },
+    select: { id: true },
+  });
+  if (!user) throw new Error("User not found");
+
+  const [
+    pipelineCount,
+    reverseRecruiterCount,
+    githubAnalysisCount,
+    companyIntelCount,
+    dripCampaignCount,
+    offerCopilotCount,
+    interviewPracticeCount,
+    meetRoomCount,
+    meetCompletedCount,
+    meetEvaluatedCount,
+    coverLetterCount,
+    resumeCount,
+    resumeChatCount,
+    recentMeetRooms,
+  ] = await Promise.all([
+    db.jobApplication.count({ where: { userId: user.id } }),
+    db.reverseRecruiterHistory.count({ where: { userId: user.id } }),
+    db.githubAnalysisHistory.count({ where: { userId: user.id } }),
+    db.companyIntelHistory.count({ where: { userId: user.id } }),
+    db.dripCampaignHistory.count({ where: { userId: user.id } }),
+    db.offerCopilotHistory.count({ where: { userId: user.id } }),
+    db.interviewHistory.count({ where: { userId: user.id } }),
+    db.interviewMeetRoom.count({ where: { ownerUserId: user.id } }),
+    db.interviewMeetRoom.count({
+      where: { ownerUserId: user.id, status: "COMPLETED" },
+    }),
+    db.interviewMeetRoom.count({
+      where: { ownerUserId: user.id, evaluatedAt: { not: null } },
+    }),
+    db.coverLetter.count({ where: { userId: user.id } }),
+    db.resume.count({ where: { userId: user.id } }),
+    db.resumeChat.count({ where: { userId: user.id } }),
+    db.interviewMeetRoom.findMany({
+      where: { ownerUserId: user.id },
+      select: {
+        id: true,
+        code: true,
+        status: true,
+        createdAt: true,
+        evaluatedAt: true,
+        evaluation: true,
+        application: {
+          select: {
+            job: {
+              select: {
+                company: true,
+                title: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 6,
+    }),
+  ]);
+
+  const recentScorecards = recentMeetRooms.map((room) => {
+    const evaluation = room.evaluation || {};
+    return {
+      id: room.id,
+      code: room.code,
+      status: room.status,
+      createdAt: room.createdAt,
+      evaluatedAt: room.evaluatedAt,
+      company: room.application?.job?.company || "Unknown",
+      role: room.application?.job?.title || "Unknown role",
+      overallScore:
+        typeof evaluation?.overallScore === "number"
+          ? evaluation.overallScore
+          : null,
+    };
+  });
+
+  return {
+    totals: {
+      pipelineCount,
+      reverseRecruiterCount,
+      githubAnalysisCount,
+      companyIntelCount,
+      dripCampaignCount,
+      offerCopilotCount,
+      interviewPracticeCount,
+      meetRoomCount,
+      meetCompletedCount,
+      meetEvaluatedCount,
+      coverLetterCount,
+      resumeCount,
+      resumeChatCount,
+    },
+    recentScorecards,
+  };
+}

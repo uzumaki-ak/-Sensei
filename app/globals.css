@@ -2,63 +2,68 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: Arial, Helvetica, sans-serif;
-}
-
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
-    --radius: 0.5rem;
+    --background: 38 31% 92%;
+    --foreground: 0 0% 10%;
+    --card: 42 24% 95%;
+    --card-foreground: 0 0% 9%;
+    --popover: 42 24% 95%;
+    --popover-foreground: 0 0% 9%;
+    --primary: 0 0% 10%;
+    --primary-foreground: 40 20% 95%;
+    --secondary: 34 16% 86%;
+    --secondary-foreground: 0 0% 12%;
+    --muted: 36 14% 84%;
+    --muted-foreground: 0 0% 35%;
+    --accent: 36 19% 80%;
+    --accent-foreground: 0 0% 10%;
+    --destructive: 0 71% 42%;
+    --destructive-foreground: 0 0% 96%;
+    --border: 0 0% 80%;
+    --input: 0 0% 80%;
+    --ring: 0 0% 30%;
+    --chart-1: 0 0% 16%;
+    --chart-2: 0 0% 30%;
+    --chart-3: 0 0% 45%;
+    --chart-4: 0 0% 60%;
+    --chart-5: 0 0% 75%;
+    --radius: 0.2rem;
+    --route-bg-dark:
+      radial-gradient(circle at 16% 18%, rgba(255, 255, 255, 0.085), transparent 34%),
+      radial-gradient(circle at 84% 76%, rgba(255, 255, 255, 0.055), transparent 40%),
+      repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.02) 0 1px, transparent 1px 44px);
+    --route-bg-light:
+      radial-gradient(circle at 16% 18%, rgba(0, 0, 0, 0.085), transparent 34%),
+      radial-gradient(circle at 84% 76%, rgba(0, 0, 0, 0.05), transparent 40%),
+      repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.045) 0 1px, transparent 1px 44px);
   }
+
   .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+    --background: 0 0% 2%;
+    --foreground: 0 0% 95%;
+    --card: 0 0% 4%;
+    --card-foreground: 0 0% 95%;
+    --popover: 0 0% 4%;
+    --popover-foreground: 0 0% 95%;
+    --primary: 0 0% 94%;
+    --primary-foreground: 0 0% 6%;
+    --secondary: 0 0% 10%;
+    --secondary-foreground: 0 0% 95%;
+    --muted: 0 0% 8%;
+    --muted-foreground: 0 0% 67%;
+    --accent: 0 0% 13%;
+    --accent-foreground: 0 0% 95%;
+    --destructive: 0 63% 35%;
+    --destructive-foreground: 0 0% 96%;
+    --border: 0 0% 13%;
+    --input: 0 0% 13%;
+    --ring: 0 0% 50%;
+    --chart-1: 0 0% 93%;
+    --chart-2: 0 0% 74%;
+    --chart-3: 0 0% 52%;
+    --chart-4: 0 0% 35%;
+    --chart-5: 0 0% 21%;
   }
 }
 
@@ -66,24 +71,285 @@ body {
   * {
     @apply border-border;
   }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-body), Inter, sans-serif;
+    letter-spacing: -0.01em;
+    text-rendering: geometricPrecision;
+    position: relative;
+    min-height: 100vh;
   }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.16;
+    background-image:
+      radial-gradient(circle at 10% 20%, rgba(255, 255, 255, 0.025), transparent 35%),
+      radial-gradient(circle at 85% 70%, rgba(255, 255, 255, 0.018), transparent 40%),
+      linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    background-size: auto, auto, 36px 36px, 36px 36px;
+    mix-blend-mode: soft-light;
+  }
+
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background-image: var(--route-bg-light);
+    opacity: 0.26;
+    transition: background-image 220ms ease, opacity 220ms ease;
+  }
+
+  .dark body::after {
+    background-image: var(--route-bg-dark);
+    opacity: 0.18;
+  }
+
+  main,
+  section,
+  header,
+  footer {
+    position: relative;
+    z-index: 1;
+  }
+
+  h1,
+  h2,
+  h3,
+  .font-display {
+    font-family: var(--font-display), sans-serif;
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+  }
+
+  .font-ui {
+    font-family: var(--font-ui), sans-serif;
+  }
+
+  .font-serif-accent {
+    font-family: var(--font-serif-accent), serif;
+    font-style: italic;
+  }
+
+  .font-tech {
+    font-family: var(--font-mono-tech), monospace;
+  }
+
+  .font-label {
+    font-family: var(--font-mono-label), monospace;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+}
+
+html[data-route-key="dashboard"] {
+  --route-bg-dark:
+    radial-gradient(circle at 10% 14%, rgba(255, 255, 255, 0.1), transparent 36%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.05), transparent 62%),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.02) 0 1px, transparent 1px 34px);
+  --route-bg-light:
+    radial-gradient(circle at 10% 14%, rgba(0, 0, 0, 0.1), transparent 36%),
+    linear-gradient(145deg, rgba(0, 0, 0, 0.05), transparent 62%),
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.045) 0 1px, transparent 1px 34px);
+}
+
+html[data-route-key="jobs-hunt"] {
+  --route-bg-dark:
+    radial-gradient(circle at 78% 16%, rgba(255, 255, 255, 0.09), transparent 33%),
+    repeating-linear-gradient(125deg, rgba(255, 255, 255, 0.024) 0 1px, transparent 1px 24px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 56%);
+  --route-bg-light:
+    radial-gradient(circle at 78% 16%, rgba(0, 0, 0, 0.09), transparent 33%),
+    repeating-linear-gradient(125deg, rgba(0, 0, 0, 0.05) 0 1px, transparent 1px 24px),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.03), transparent 56%);
+}
+
+html[data-route-key="jobs-kanban"] {
+  --route-bg-dark:
+    linear-gradient(95deg, rgba(255, 255, 255, 0.04), transparent 32%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.026) 0 1px, transparent 1px 72px),
+    radial-gradient(circle at 72% 78%, rgba(255, 255, 255, 0.06), transparent 38%);
+  --route-bg-light:
+    linear-gradient(95deg, rgba(0, 0, 0, 0.04), transparent 32%),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.048) 0 1px, transparent 1px 72px),
+    radial-gradient(circle at 72% 78%, rgba(0, 0, 0, 0.055), transparent 38%);
+}
+
+html[data-route-key="resume"] {
+  --route-bg-dark:
+    radial-gradient(circle at 22% 20%, rgba(255, 255, 255, 0.08), transparent 24%),
+    radial-gradient(circle at 24% 22%, rgba(255, 255, 255, 0.03), transparent 36%),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.021) 0 1px, transparent 1px 28px);
+  --route-bg-light:
+    radial-gradient(circle at 22% 20%, rgba(0, 0, 0, 0.08), transparent 24%),
+    radial-gradient(circle at 24% 22%, rgba(0, 0, 0, 0.03), transparent 36%),
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.045) 0 1px, transparent 1px 28px);
+}
+
+html[data-route-key="cover-letter"] {
+  --route-bg-dark:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), transparent 22%),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.019) 0 1px, transparent 1px 18px),
+    radial-gradient(circle at 86% 84%, rgba(255, 255, 255, 0.06), transparent 36%);
+  --route-bg-light:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.045), transparent 22%),
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.042) 0 1px, transparent 1px 18px),
+    radial-gradient(circle at 86% 84%, rgba(0, 0, 0, 0.06), transparent 36%);
+}
+
+html[data-route-key="interview"] {
+  --route-bg-dark:
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.055), transparent 44%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 36px),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 36px);
+  --route-bg-light:
+    radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0.055), transparent 44%),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.04) 0 1px, transparent 1px 36px),
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.04) 0 1px, transparent 1px 36px);
+}
+
+html[data-route-key="advanced-reverse-recruiter"] {
+  --route-bg-dark:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.045), transparent 58%),
+    repeating-linear-gradient(120deg, rgba(255, 255, 255, 0.02) 0 1px, transparent 1px 30px),
+    radial-gradient(circle at 82% 20%, rgba(255, 255, 255, 0.075), transparent 34%);
+  --route-bg-light:
+    linear-gradient(160deg, rgba(0, 0, 0, 0.045), transparent 58%),
+    repeating-linear-gradient(120deg, rgba(0, 0, 0, 0.042) 0 1px, transparent 1px 30px),
+    radial-gradient(circle at 82% 20%, rgba(0, 0, 0, 0.075), transparent 34%);
+}
+
+html[data-route-key="advanced-github-analyzer"] {
+  --route-bg-dark:
+    radial-gradient(circle at 14% 78%, rgba(255, 255, 255, 0.08), transparent 32%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.015) 0 1px, transparent 1px 20px),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.015) 0 1px, transparent 1px 20px);
+  --route-bg-light:
+    radial-gradient(circle at 14% 78%, rgba(0, 0, 0, 0.08), transparent 32%),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.035) 0 1px, transparent 1px 20px),
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.035) 0 1px, transparent 1px 20px);
+}
+
+html[data-route-key="advanced-company-intel"] {
+  --route-bg-dark:
+    radial-gradient(circle at 20% 76%, rgba(255, 255, 255, 0.09), transparent 30%),
+    radial-gradient(circle at 76% 22%, rgba(255, 255, 255, 0.06), transparent 34%),
+    repeating-linear-gradient(105deg, rgba(255, 255, 255, 0.016) 0 1px, transparent 1px 26px);
+  --route-bg-light:
+    radial-gradient(circle at 20% 76%, rgba(0, 0, 0, 0.09), transparent 30%),
+    radial-gradient(circle at 76% 22%, rgba(0, 0, 0, 0.06), transparent 34%),
+    repeating-linear-gradient(105deg, rgba(0, 0, 0, 0.038) 0 1px, transparent 1px 26px);
+}
+
+html[data-route-key="advanced-drip-campaigns"] {
+  --route-bg-dark:
+    linear-gradient(178deg, rgba(255, 255, 255, 0.045), transparent 26%),
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 22px),
+    radial-gradient(circle at 84% 74%, rgba(255, 255, 255, 0.07), transparent 36%);
+  --route-bg-light:
+    linear-gradient(178deg, rgba(0, 0, 0, 0.045), transparent 26%),
+    repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.04) 0 1px, transparent 1px 22px),
+    radial-gradient(circle at 84% 74%, rgba(0, 0, 0, 0.07), transparent 36%);
+}
+
+html[data-route-key="advanced-offer-copilot"] {
+  --route-bg-dark:
+    radial-gradient(circle at 50% 80%, rgba(255, 255, 255, 0.07), transparent 35%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.023) 0 1px, transparent 1px 52px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 48%);
+  --route-bg-light:
+    radial-gradient(circle at 50% 80%, rgba(0, 0, 0, 0.07), transparent 35%),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.042) 0 1px, transparent 1px 52px),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.035), transparent 48%);
+}
+
+html[data-route-key="advanced-interview-simulator"] {
+  --route-bg-dark:
+    radial-gradient(circle at 54% 50%, rgba(255, 255, 255, 0.075), transparent 38%),
+    radial-gradient(circle at 54% 50%, rgba(255, 255, 255, 0.03), transparent 24%),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.017) 0 1px, transparent 1px 30px);
+  --route-bg-light:
+    radial-gradient(circle at 54% 50%, rgba(0, 0, 0, 0.075), transparent 38%),
+    radial-gradient(circle at 54% 50%, rgba(0, 0, 0, 0.03), transparent 24%),
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.039) 0 1px, transparent 1px 30px);
+}
+
+html[data-route-key="advanced-telegram-sniper"] {
+  --route-bg-dark:
+    radial-gradient(circle at 84% 18%, rgba(255, 255, 255, 0.085), transparent 34%),
+    repeating-radial-gradient(circle at center, rgba(255, 255, 255, 0.022) 0 1px, transparent 1px 18px),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.028), transparent 54%);
+  --route-bg-light:
+    radial-gradient(circle at 84% 18%, rgba(0, 0, 0, 0.085), transparent 34%),
+    repeating-radial-gradient(circle at center, rgba(0, 0, 0, 0.04) 0 1px, transparent 1px 18px),
+    linear-gradient(135deg, rgba(0, 0, 0, 0.028), transparent 54%);
+}
+
+html[data-route-key="meet"] {
+  --route-bg-dark:
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.1), transparent 44%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.016) 0 1px, transparent 1px 32px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 60%);
+  --route-bg-light:
+    radial-gradient(circle at center, rgba(0, 0, 0, 0.1), transparent 44%),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.038) 0 1px, transparent 1px 32px),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.03), transparent 60%);
 }
 
 @layer utilities {
   .gradient {
-    @apply bg-gradient-to-b from-gray-400 via-gray-200 to-gray-600;
+    background-image: linear-gradient(180deg, #e8e4dc 0%, #d8d2c8 48%, #b8b0a5 100%);
   }
+
+  .dark .gradient {
+    background-image: linear-gradient(180deg, #101010 0%, #090909 54%, #040404 100%);
+  }
+
   .gradient-title {
-    @apply gradient font-extrabold tracking-tighter text-transparent bg-clip-text pb-2 pr-2;
+    @apply font-display pb-1 text-transparent;
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(190, 190, 190, 0.82) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+  }
+
+  .text-quiet {
+    color: rgba(242, 242, 242, 0.64);
   }
 }
 
-/* Custom Sleek Scrollbar */
+html.sidebar-collapsed .app-sidebar {
+  transform: translateX(-100%);
+  opacity: 0;
+}
+
+html.sidebar-collapsed .app-main {
+  padding-left: 0;
+}
+
+.app-sidebar {
+  transition: transform 240ms ease, opacity 240ms ease;
+}
+
+.app-main {
+  transition: padding-left 240ms ease;
+}
+
+/* Sleek Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
 }
 
 ::-webkit-scrollbar-track {
@@ -91,15 +357,13 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(155, 155, 155, 0.2);
-  border-radius: 10px;
+  background: rgba(140, 140, 140, 0.28);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(155, 155, 155, 0.4);
+  background: rgba(168, 168, 168, 0.46);
 }
 
-/* Utility to hide scrollbar but keep functionality */
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
@@ -114,8 +378,7 @@ body {
 }
 
 .hero-image {
-  /* transform: rotateX(20deg) scale(0.9) translateY(-50); */
-  transform: rotateX(15deg) scale(1);
+  transform: rotateX(12deg) scale(1);
   transition: transform 0.5s ease-out;
   will-change: transform;
 }
@@ -126,27 +389,18 @@ body {
 
 .grid-background {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(
-      to right,
-      rgba(255, 255, 255, 0.1) 1px,
-      transparent 1px
-    ),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
-  background-size: 50px 50px;
+  inset: 0;
   pointer-events: none;
   z-index: -1;
+  background:
+    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 54px 54px;
 }
 
 .grid-background::before {
   content: "";
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: radial-gradient(circle, transparent, rgba(0, 0, 0, 0.9));
+  inset: 0;
+  background: radial-gradient(circle at center, transparent, rgba(0, 0, 0, 0.78));
 }

@@ -27,20 +27,21 @@ const HeroSection = () => {
   }, []);
 
   return (
-    <section className="w-full pt-36 md:pt-48 pb-10">
+    <section className="w-full pb-10 pt-24 md:pt-28">
       <div className="space-y-6 text-center">
-        <div className="space-y-6 mx-auto">
-          <h1 className="text-5xl font-bold md:text-6xl lg:text-7xl xl:text-8xl gradient-title animate-gradient">
+        <div className="mx-auto max-w-5xl space-y-6">
+          <p className="font-label text-xs text-muted-foreground">Career OS for builders</p>
+          <h1 className="gradient-title text-5xl font-bold md:text-6xl lg:text-7xl xl:text-8xl">
             Your AI Career Coach for
             <br />
             Professional Success
           </h1>
-          <p className="mx-auto max-w-[600px] text-muted-foreground md:text-xl">
+          <p className="mx-auto max-w-[700px] text-muted-foreground md:text-xl">
             Advance your career with personalized guidance, interview prep, and
             AI-powered tools for job success.
           </p>
         </div>
-        <div className="flex justify-center space-x-4">
+        <div className="flex flex-wrap justify-center gap-3">
           <Link href="/dashboard">
             <Button size="lg" className="px-8">
               Get Started
@@ -52,6 +53,12 @@ const HeroSection = () => {
             </Button>
           </Link>
         </div>
+        <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-center gap-2 pt-1">
+          <span className="rounded-sm border border-border/70 bg-muted/30 px-3 py-1 text-xs text-muted-foreground">Live Interview Rooms</span>
+          <span className="rounded-sm border border-border/70 bg-muted/30 px-3 py-1 text-xs text-muted-foreground">Company Intel</span>
+          <span className="rounded-sm border border-border/70 bg-muted/30 px-3 py-1 text-xs text-muted-foreground">Reverse Recruiter</span>
+          <span className="rounded-sm border border-border/70 bg-muted/30 px-3 py-1 text-xs text-muted-foreground">Offer Copilot</span>
+        </div>
         <div className="hero-image-wrapper mt-5 md:mt-0">
           <div ref={imageRef} className="hero-image">
             <Image
@@ -59,7 +66,7 @@ const HeroSection = () => {
               width={1280}
               height={720}
               alt="Dashboard Preview"
-              className="rounded-lg shadow-2xl border mx-auto"
+              className="mx-auto border border-border/70 shadow-2xl"
               priority
             />
           </div>

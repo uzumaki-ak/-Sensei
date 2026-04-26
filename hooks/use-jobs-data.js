@@ -13,6 +13,10 @@ export function useJobsData() {
   const [applications, setApplications] = useState([]);
   const [personas, setPersonas] = useState([]);
   const [isGmailConnected, setIsGmailConnected] = useState(false);
+  const [isGmailFullyAuthorized, setIsGmailFullyAuthorized] = useState(false);
+  const [gmailNeedsReconnect, setGmailNeedsReconnect] = useState(false);
+  const [isTelegramConnected, setIsTelegramConnected] = useState(false);
+  const [telegramChatId, setTelegramChatId] = useState(null);
   const [userId, setUserId] = useState(null);
   const [loading, setLoading] = useState(true);
   const searchParams = useSearchParams();
@@ -41,6 +45,10 @@ export function useJobsData() {
       setApplications(data.applications || []);
       setPersonas(data.personas || []);
       setIsGmailConnected(data.isGmailConnected);
+      setIsGmailFullyAuthorized(Boolean(data.isGmailFullyAuthorized));
+      setGmailNeedsReconnect(Boolean(data.gmailNeedsReconnect));
+      setIsTelegramConnected(Boolean(data.isTelegramConnected));
+      setTelegramChatId(data.telegramChatId || null);
       setUserId(data.userId);
       hasFetchedSuccessfullyRef.current = true;
     } catch (error) {
@@ -149,6 +157,10 @@ export function useJobsData() {
     applications,
     personas,
     isGmailConnected,
+    isGmailFullyAuthorized,
+    gmailNeedsReconnect,
+    isTelegramConnected,
+    telegramChatId,
     userId,
     loading,
     loadJobs,

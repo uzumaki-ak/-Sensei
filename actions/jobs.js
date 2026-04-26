@@ -22,6 +22,7 @@ import {
   parseJsonFromProcessOutput,
   upsertJobApplicationForUser,
 } from "@/lib/jobs-ingestion";
+import { getGmailAuthState } from "@/lib/gmail-scopes";
 
 const execPromise = promisify(exec);
 const SCRAPER_TIMEOUT_MS = Number(process.env.HUNT_SCRAPE_TIMEOUT_MS || 30000);
@@ -143,11 +144,16 @@ export async function getJobApplications() {
     }
 
     console.log("[getJobApplications] Found applications:", applications.length);
+    const gmailStatus = getGmailAuthState(user.gmailToken);
 
     return {
       applications,
       personas: user.personas || [],
-      isGmailConnected: !!user.gmailToken,
+      isGmailConnected: gmailStatus.isConnected,
+      isGmailFullyAuthorized: gmailStatus.hasRequiredScopes,
+      gmailNeedsReconnect: gmailStatus.needsReconnect,
+      isTelegramConnected: Boolean(user.telegramChatId),
+      telegramChatId: user.telegramChatId || null,
       userId: user.id,
     };
   } catch (error) {
@@ -170,7 +176,10 @@ export async function getGmailAuthUrl() {
 
   return oauth2Client.generateAuthUrl({
     access_type: "offline",
-    scope: ["https://www.googleapis.com/auth/gmail.send"],
+    scope: [
+      "https://www.googleapis.com/auth/gmail.send",
+      "https://www.googleapis.com/auth/gmail.compose",
+    ],
     prompt: "consent",
   });
 }

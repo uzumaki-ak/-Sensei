@@ -3,7 +3,11 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { chatWithResume } from "@/actions/resume";
+import {
+  chatWithResume,
+  getResumeChatHistory,
+  clearResumeChatHistory,
+} from "@/actions/resume";
 import { Loader2, Send, MessageSquare, Bot, User, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -11,6 +15,7 @@ export default function ResumeChat({ resumeId, onResumeUpdate }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const scrollRef = useRef(null);
 
   useEffect(() => {
@@ -18,6 +23,46 @@ export default function ResumeChat({ resumeId, onResumeUpdate }) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadHistory = async () => {
+      if (!resumeId) {
+        setMessages([]);
+        return;
+      }
+      setIsHistoryLoading(true);
+      try {
+        const result = await getResumeChatHistory(resumeId);
+        if (!mounted) return;
+        if (result?.success) {
+          setMessages(
+            (result.messages || []).map((item) => ({
+              role: item.role,
+              content: item.content,
+            }))
+          );
+        } else {
+          toast.error("Failed to load resume chat history.");
+        }
+      } catch {
+        if (mounted) {
+          toast.error("Failed to load resume chat history.");
+        }
+      } finally {
+        if (mounted) {
+          setIsHistoryLoading(false);
+        }
+      }
+    };
+
+    loadHistory();
+
+    return () => {
+      mounted = false;
+    };
+  }, [resumeId]);
 
   const handleSend = async () => {
     if (!input.trim() || !resumeId) return;
@@ -31,7 +76,6 @@ export default function ResumeChat({ resumeId, onResumeUpdate }) {
       const result = await chatWithResume({
         resumeId,
         message: userMessage.content,
-        history: messages,
       });
 
       setMessages((prev) => [
@@ -54,7 +98,19 @@ export default function ResumeChat({ resumeId, onResumeUpdate }) {
   };
 
   const handleClear = () => {
-    setMessages([]);
+    if (!resumeId) return;
+    setIsHistoryLoading(true);
+    clearResumeChatHistory(resumeId)
+      .then(() => {
+        setMessages([]);
+        toast.success("Chat cleared.");
+      })
+      .catch(() => {
+        toast.error("Failed to clear chat.");
+      })
+      .finally(() => {
+        setIsHistoryLoading(false);
+      });
   };
 
   if (!resumeId) {
@@ -77,7 +133,13 @@ export default function ResumeChat({ resumeId, onResumeUpdate }) {
           <span className="text-sm font-semibold">Resume Advisor</span>
         </div>
         {messages.length > 0 && (
-          <Button variant="ghost" size="sm" onClick={handleClear} className="h-7 text-xs gap-1 text-muted-foreground hover:text-destructive">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleClear}
+            disabled={isLoading || isHistoryLoading}
+            className="h-7 text-xs gap-1 text-muted-foreground hover:text-destructive"
+          >
             <Trash2 className="h-3 w-3" />
             Clear
           </Button>
@@ -86,7 +148,14 @@ export default function ResumeChat({ resumeId, onResumeUpdate }) {
 
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.length === 0 && (
+        {isHistoryLoading && messages.length === 0 && (
+          <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading chat history...
+          </div>
+        )}
+
+        {!isHistoryLoading && messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center gap-3 py-8">
             <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
               <MessageSquare className="h-5 w-5 text-primary" />
@@ -173,7 +242,7 @@ export default function ResumeChat({ resumeId, onResumeUpdate }) {
           <Button
             size="icon"
             onClick={handleSend}
-            disabled={isLoading || !input.trim()}
+            disabled={isLoading || isHistoryLoading || !input.trim()}
             className="shrink-0 h-10 w-10"
           >
             {isLoading ? (

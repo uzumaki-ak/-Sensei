@@ -27,6 +27,7 @@ import { useMemo, useRef, useState, useTransition, useEffect, Suspense } from "r
 import { toast } from "sonner";
 
 const STATUS_OPTIONS = ["All", "Discovered", "To Apply", "Applied", "Interviewing", "Offer", "Rejected"];
+const FEED_PAGE_SIZE = 8;
 
 function JobsHuntContent() {
   const { applications, personas, userId, loading, loadJobs } = useJobsData();
@@ -35,7 +36,6 @@ function JobsHuntContent() {
   const [statusFilter, setStatusFilter] = useState("All");
   const [isPending, startTransition] = useTransition();
   const [currentPage, setCurrentPage] = useState(1);
-  const jobsPerPage = 20;
   const fileInputRef = useRef(null);
 
   const discoveredApplications = useMemo(
@@ -58,16 +58,20 @@ function JobsHuntContent() {
   }, [applications, searchTerm, statusFilter]);
 
   // Pagination logic
-  const totalPages = Math.ceil(filteredFeed.length / jobsPerPage);
+  const totalPages = Math.max(1, Math.ceil(filteredFeed.length / FEED_PAGE_SIZE));
   const paginatedFeed = useMemo(() => {
-    const start = (currentPage - 1) * jobsPerPage;
-    return filteredFeed.slice(start, start + jobsPerPage);
-  }, [filteredFeed, currentPage, jobsPerPage]);
+    const start = (currentPage - 1) * FEED_PAGE_SIZE;
+    return filteredFeed.slice(start, start + FEED_PAGE_SIZE);
+  }, [filteredFeed, currentPage]);
 
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, statusFilter]);
+
+  useEffect(() => {
+    setCurrentPage((prev) => Math.min(prev, totalPages));
+  }, [totalPages]);
 
   const stats = useMemo(
     () => ({
@@ -365,31 +369,6 @@ function JobsHuntContent() {
              </table>
            </div>
            
-           {/* Pagination Controls */}
-           {totalPages > 1 && (
-             <div className="flex items-center justify-center gap-2 p-4 border-t">
-               <Button
-                 variant="outline"
-                 size="sm"
-                 onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                 disabled={currentPage === 1}
-               >
-                 Previous
-               </Button>
-               <span className="text-sm text-muted-foreground">
-                 Page {currentPage} of {totalPages} ({filteredFeed.length} jobs)
-               </span>
-               <Button
-                 variant="outline"
-                 size="sm"
-                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                 disabled={currentPage === totalPages}
-               >
-                 Next
-               </Button>
-             </div>
-           )}
-
           <div className="space-y-3 p-4 md:hidden">
             {filteredFeed.length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">No jobs match current filters.</p>
@@ -443,6 +422,36 @@ function JobsHuntContent() {
               ))
             )}
           </div>
+
+          {totalPages > 1 ? (
+            <div className="flex items-center justify-between gap-2 border-t px-4 py-3">
+              <p className="text-xs text-muted-foreground">
+                Showing {(currentPage - 1) * FEED_PAGE_SIZE + 1}-
+                {Math.min(currentPage * FEED_PAGE_SIZE, filteredFeed.length)} of {filteredFeed.length}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  {currentPage}/{totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
     </div>

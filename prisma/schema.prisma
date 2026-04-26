@@ -31,6 +31,11 @@ model User {
   resume          Resume?          @relation("UserPrimaryResume", fields: [primaryResumeId], references: [id])
   industryInsight IndustryInsight? @relation(fields: [industry], references: [industry])
   githubAnalyses  GithubAnalysisHistory[]
+  reverseRecruiterHistories ReverseRecruiterHistory[]
+  companyIntelHistories CompanyIntelHistory[]
+  dripCampaignHistories DripCampaignHistory[]
+  offerCopilotHistories OfferCopilotHistory[]
+  interviewMeetRooms InterviewMeetRoom[]
 }
 
 model Assessment {
@@ -130,6 +135,11 @@ model JobApplication {
   job            JobListing @relation(fields: [jobId], references: [id])
   user           User       @relation(fields: [userId], references: [id])
   githubAnalyses GithubAnalysisHistory[]
+  reverseRecruiterHistories ReverseRecruiterHistory[]
+  companyIntelHistories CompanyIntelHistory[]
+  dripCampaignHistories DripCampaignHistory[]
+  offerCopilotHistories OfferCopilotHistory[]
+  interviewMeetRooms InterviewMeetRoom[]
 
   @@index([userId])
   @@index([jobId])
@@ -208,3 +218,108 @@ model GithubAnalysisHistory {
   @@index([applicationId])
 }
 
+model ReverseRecruiterHistory {
+  id              String   @id @default(cuid())
+  userId          String
+  applicationId   String
+  targetName      String
+  targetEmail     String
+  subject         String
+  body            String
+  createdAt       DateTime @default(now())
+
+  user            User           @relation(fields: [userId], references: [id])
+  application     JobApplication @relation(fields: [applicationId], references: [id])
+
+  @@index([userId])
+  @@index([applicationId])
+}
+
+model CompanyIntelHistory {
+  id                  String   @id @default(cuid())
+  userId              String
+  applicationId       String
+  manualLinks         String[]
+  intel               Json
+  talkingPointsMarkdown String?
+  recentNews          Json?
+  createdAt           DateTime @default(now())
+
+  user                User           @relation(fields: [userId], references: [id])
+  application         JobApplication @relation(fields: [applicationId], references: [id])
+
+  @@index([userId])
+  @@index([applicationId])
+}
+
+model DripCampaignHistory {
+  id               String   @id @default(cuid())
+  userId           String
+  applicationId    String
+  sequenceMarkdown String
+  createdAt        DateTime @default(now())
+
+  user             User           @relation(fields: [userId], references: [id])
+  application      JobApplication @relation(fields: [applicationId], references: [id])
+
+  @@index([userId])
+  @@index([applicationId])
+}
+
+model OfferCopilotHistory {
+  id                        String   @id @default(cuid())
+  userId                    String
+  applicationId             String
+  offerInput                Json
+  playbook                  Json
+  compensation              Json
+  negotiationScriptMarkdown String?
+  createdAt                 DateTime @default(now())
+
+  user                      User           @relation(fields: [userId], references: [id])
+  application               JobApplication @relation(fields: [applicationId], references: [id])
+
+  @@index([userId])
+  @@index([applicationId])
+}
+
+model InterviewMeetRoom {
+  id            String   @id @default(cuid())
+  code          String   @unique
+  ownerUserId   String
+  applicationId String
+  candidateName String?
+  candidateContext String?
+  companyContext String?
+  jobContext    Json?
+  status        String   @default("WAITING")
+  maxQuestions  Int      @default(8)
+  questionCount Int      @default(0)
+  evaluation    Json?
+  evaluatedAt   DateTime?
+  startedAt     DateTime?
+  endedAt       DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  owner         User           @relation(fields: [ownerUserId], references: [id])
+  application   JobApplication @relation(fields: [applicationId], references: [id])
+  turns         InterviewMeetTurn[]
+
+  @@index([ownerUserId])
+  @@index([applicationId])
+  @@index([status])
+}
+
+model InterviewMeetTurn {
+  id        String   @id @default(cuid())
+  roomId    String
+  role      String
+  content   String
+  createdAt DateTime @default(now())
+
+  room      InterviewMeetRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([roomId])
+  @@index([role])
+}

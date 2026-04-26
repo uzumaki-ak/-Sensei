@@ -308,8 +308,28 @@ export async function chatWithResume({ resumeId, message, history = [] }) {
 
   if (!resume) throw new Error("Resume not found");
 
-  // Build conversation context
-  const conversationHistory = history.map(h => `${h.role}: ${h.content}`).join('\n');
+  const cleanMessage = String(message || "").trim();
+  if (!cleanMessage) throw new Error("Message is required");
+
+  const recentPersistedMessages = await db.resumeChat.findMany({
+    where: {
+      resumeId,
+      userId: user.id,
+    },
+    orderBy: {
+      createdAt: "asc",
+    },
+    take: 40,
+  });
+
+  // Build conversation context from persisted chat (fallback to provided history for first run).
+  const contextMessages =
+    recentPersistedMessages.length > 0
+      ? [...recentPersistedMessages, { role: "user", content: cleanMessage }]
+      : [...history, { role: "user", content: cleanMessage }];
+  const conversationHistory = contextMessages
+    .map((item) => `${item.role}: ${item.content}`)
+    .join("\n");
 
   const prompt = `
 You are an expert resume advisor. Help the user edit and improve their resume.
@@ -321,7 +341,7 @@ CONVERSATION HISTORY:
 ${conversationHistory}
 
 USER MESSAGE:
-${message}
+${cleanMessage}
 
 INSTRUCTIONS:
 1. You can suggest changes, improvements, or answer questions about the resume
@@ -332,16 +352,114 @@ INSTRUCTIONS:
 Respond in a helpful, conversational manner. If providing new resume content, clearly mark it.
 `;
 
+  let userChatId = null;
+
   try {
+    const userChat = await db.resumeChat.create({
+      data: {
+        resumeId,
+        userId: user.id,
+        role: "user",
+        content: cleanMessage,
+      },
+    });
+    userChatId = userChat.id;
+
     const result = await model.generateContent(prompt);
     const response = result.response.text().trim();
+
+    await db.resumeChat.create({
+      data: {
+        resumeId,
+        userId: user.id,
+        role: "assistant",
+        content: response,
+      },
+    });
 
     return {
       response,
       resumeId,
     };
   } catch (error) {
+    if (userChatId) {
+      await db.resumeChat
+        .delete({
+          where: { id: userChatId },
+        })
+        .catch(() => {});
+    }
     console.error("Error in resume chat:", error);
     throw new Error("Failed to get response");
   }
+}
+
+export async function getResumeChatHistory(resumeId) {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Unauthorized");
+
+  const user = await db.user.findUnique({
+    where: { clerkUserId: userId },
+    select: { id: true },
+  });
+  if (!user) throw new Error("User not found");
+
+  const resume = await db.resume.findFirst({
+    where: {
+      id: resumeId,
+      userId: user.id,
+    },
+    select: { id: true },
+  });
+  if (!resume) throw new Error("Resume not found");
+
+  const messages = await db.resumeChat.findMany({
+    where: {
+      resumeId,
+      userId: user.id,
+    },
+    orderBy: {
+      createdAt: "asc",
+    },
+    take: 120,
+  });
+
+  return {
+    success: true,
+    messages: messages.map((item) => ({
+      id: item.id,
+      role: item.role,
+      content: item.content,
+      createdAt: item.createdAt,
+    })),
+  };
+}
+
+export async function clearResumeChatHistory(resumeId) {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Unauthorized");
+
+  const user = await db.user.findUnique({
+    where: { clerkUserId: userId },
+    select: { id: true },
+  });
+  if (!user) throw new Error("User not found");
+
+  const resume = await db.resume.findFirst({
+    where: {
+      id: resumeId,
+      userId: user.id,
+    },
+    select: { id: true },
+  });
+  if (!resume) throw new Error("Resume not found");
+
+  await db.resumeChat.deleteMany({
+    where: {
+      resumeId,
+      userId: user.id,
+    },
+  });
+
+  return { success: true };
 }

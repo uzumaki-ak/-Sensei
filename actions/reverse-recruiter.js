@@ -5,6 +5,22 @@ import { auth } from "@clerk/nextjs/server";
 import { getModel, handleGeminiError } from "@/lib/gemini";
 import { google } from "googleapis";
 import { SchemaType } from "@google/generative-ai";
+import { hasGmailDraftScope } from "@/lib/gmail-scopes";
+
+function buildTargetEmail(targetName, companyName) {
+  const localPart = String(targetName || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s.-]/g, "")
+    .replace(/\s+/g, ".");
+
+  const domainPart = String(companyName || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]/g, "");
+
+  return `${localPart || "hiring"}@${domainPart || "company"}.com`;
+}
 
 /**
  * Generates an aggressive outbound pitch and drafts it via the Gmail API.
@@ -38,6 +54,11 @@ export async function generateReverseRecruiterPitch(applicationId, targetName) {
 
     if (!application) throw new Error("Job application not found.");
     if (!application.user.gmailToken) throw new Error("Please connect Gmail in the dashboard first.");
+    if (!hasGmailDraftScope(application.user.gmailToken)) {
+      throw new Error(
+        "Gmail permission is missing for Drafts. Reconnect Gmail from Dashboard, approve all requested scopes, then try again."
+      );
+    }
 
     const { job, user } = application;
     const userBio = user.bio || "A passionate tech professional.";
@@ -98,7 +119,7 @@ Return your response ONLY as a strict JSON object.
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
     // Format email RFC 2822
-    const targetEmail = `${targetName.toLowerCase().replace(/\s+/g, ".")}@${job.company.toLowerCase().replace(/\s+/g, "")}.com`;
+    const targetEmail = buildTargetEmail(targetName, job.company);
     const emailLines = [
       `To: ${targetEmail}`,
       `Subject: ${parsed.subject}`,
@@ -123,16 +144,86 @@ Return your response ONLY as a strict JSON object.
       },
     });
 
+    const historyItem = await db.reverseRecruiterHistory.create({
+      data: {
+        userId: user.id,
+        applicationId: application.id,
+        targetName: String(targetName).trim(),
+        targetEmail,
+        subject: String(parsed.subject || "No subject"),
+        body: String(parsed.body || ""),
+      },
+      include: {
+        application: {
+          include: {
+            job: true,
+          },
+        },
+      },
+    });
+
     return {
       success: true,
       message: "Pitch drafted successfully! Check your Gmail Drafts folder.",
+      draft: historyItem,
     };
 
   } catch (error) {
+    const message = String(error?.message || "");
+    if (
+      error?.code === 403 ||
+      error?.status === 403 ||
+      message.toLowerCase().includes("insufficient authentication scopes")
+    ) {
+      return {
+        success: false,
+        error:
+          "Gmail permission is missing for Drafts. Reconnect Gmail from Dashboard, approve all requested scopes, then try again.",
+      };
+    }
+
     const friendlyError = handleGeminiError(error);
     return {
       success: false,
       error: friendlyError,
+    };
+  }
+}
+
+export async function getReverseRecruiterHistory(applicationId = null) {
+  try {
+    const { userId } = await auth();
+    if (!userId) throw new Error("Unauthorized");
+
+    const user = await db.user.findUnique({
+      where: { clerkUserId: userId },
+      select: { id: true },
+    });
+    if (!user) throw new Error("User not found");
+
+    const history = await db.reverseRecruiterHistory.findMany({
+      where: {
+        userId: user.id,
+        ...(applicationId ? { applicationId } : {}),
+      },
+      include: {
+        application: {
+          include: {
+            job: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      take: 50,
+    });
+
+    return { success: true, history };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message || "Failed to fetch reverse recruiter history.",
     };
   }
 }

@@ -21,10 +21,12 @@ export async function generateInterviewQuestions(applicationId, projectDetails) 
     }
 
     // 1. Fetch Job Application Details
-    const application = await db.jobApplication.findUnique({
+    const application = await db.jobApplication.findFirst({
       where: {
         id: applicationId,
-        userId: userId,
+        user: {
+          clerkUserId: userId,
+        },
       },
       include: {
         job: true,
@@ -115,9 +117,19 @@ export async function gradeInterviewAnswers(applicationId, qaPairs, projectDetai
         }
     
         // Fetch job context again for accurate grading
-        const application = await db.jobApplication.findUnique({
-          where: { id: applicationId, userId: userId },
-          include: { job: true },
+        const application = await db.jobApplication.findFirst({
+          where: {
+            id: applicationId,
+            user: { clerkUserId: userId }
+          },
+          include: {
+            job: true,
+            user: {
+              select: {
+                id: true,
+              },
+            },
+          },
         });
     
         if (!application) throw new Error("Job application not found.");
@@ -161,7 +173,7 @@ Do not include markdown code block formatting in the response.
         // Save to Database
         const savedHistory = await db.interviewHistory.create({
           data: {
-            userId: userId,
+            userId: application.user.id,
             jobId: application.job.id, // Properly link to JobListing
             projectContext: projectDetails || "Mock Interview", 
             qaPairs: {

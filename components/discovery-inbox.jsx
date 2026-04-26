@@ -13,11 +13,16 @@ import { isHttpUrl } from "@/lib/jobs-ingestion";
 export default function DiscoveryInbox({ initialJobs = [], userId, onShortlist }) {
   const [jobs, setJobs] = useState(initialJobs);
   const [currentPage, setCurrentPage] = useState(1);
-  const jobsPerPage = 9;
+  const jobsPerPage = 6;
 
   useEffect(() => {
     setJobs(initialJobs);
   }, [initialJobs]);
+
+  useEffect(() => {
+    const nextTotalPages = Math.max(1, Math.ceil(jobs.length / jobsPerPage));
+    setCurrentPage((prev) => Math.min(prev, nextTotalPages));
+  }, [jobs, jobsPerPage]);
 
   useEffect(() => {
     if (!userId) return;
@@ -133,24 +138,32 @@ export default function DiscoveryInbox({ initialJobs = [], userId, onShortlist }
 
       {/* Pagination Controls */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2 mt-4">
-          <button
-            className="px-3 py-1 text-sm rounded border bg-background hover:bg-muted disabled:opacity-50"
-            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-            disabled={currentPage === 1}
-          >
-            Previous
-          </button>
-          <span className="text-sm text-muted-foreground">
-            Page {currentPage} of {totalPages}
-          </span>
-          <button
-            className="px-3 py-1 text-sm rounded border bg-background hover:bg-muted disabled:opacity-50"
-            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-            disabled={currentPage === totalPages}
-          >
-            Next
-          </button>
+        <div className="mt-4 flex items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground">
+            Showing {(currentPage - 1) * jobsPerPage + 1}-{Math.min(currentPage * jobsPerPage, jobs.length)} of{" "}
+            {jobs.length}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+            >
+              Previous
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              {currentPage}/{totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+            >
+              Next
+            </Button>
+          </div>
         </div>
       )}
 

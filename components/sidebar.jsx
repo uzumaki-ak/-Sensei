@@ -17,10 +17,11 @@ import {
   Scale,
   MessageSquare,
   Bot,
-  Upload,
+  Circle,
 } from "lucide-react";
 import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs";
 import GmailConnectButton from "./gmail-connect-button";
+import { hasGmailDraftScope } from "@/lib/gmail-scopes";
 
 // We're converting to a sidebar that fits the "dark and white" theme aesthetic.
 // It will be fixed on the left for md+ screens.
@@ -28,127 +29,132 @@ import GmailConnectButton from "./gmail-connect-button";
 export default async function Sidebar() {
   const user = await checkUser();
   const isGmailConnected = !!user?.gmailToken;
+  const needsGmailReconnect = isGmailConnected && !hasGmailDraftScope(user?.gmailToken);
 
   return (
-    <aside className="fixed left-0 top-0 z-40 h-screen w-64 border-r bg-background/80 backdrop-blur-md supports-[backdrop-filter]:bg-background/60 hidden md:flex flex-col">
-      <div className="h-16 flex items-center px-6 border-b">
-        <Link href="/">
+    <aside className="app-sidebar fixed left-0 top-0 z-50 hidden h-screen w-72 flex-col border-r border-border/60 bg-card/95 backdrop-blur-md md:flex">
+      <div className="flex h-16 items-center justify-between border-b border-border/60 px-6">
+        <Link href="/" className="transition-opacity hover:opacity-80">
           <Image
             src={"/logo.png"}
             alt="Sensai Logo"
-            width={160}
-            height={50}
-            className="h-10 w-auto object-contain"
+            width={140}
+            height={42}
+            className="h-9 w-auto object-contain"
           />
         </Link>
+        <Circle className="h-3.5 w-3.5 fill-foreground/30 text-foreground/30" />
       </div>
 
-      <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
+      <nav className="flex-1 space-y-2 overflow-y-auto px-4 py-6">
         <SignedIn>
-          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4 px-2">
+          <div className="mb-3 px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             Overview
           </div>
           <Link href="/dashboard">
-            <Button variant="ghost" className="w-full justify-start gap-3 px-2">
-              <LayoutDashboard className="h-5 w-5" />
+            <Button variant="ghost" className="w-full justify-start gap-3 px-2.5">
+              <LayoutDashboard className="h-4.5 w-4.5" />
               Industry Insights
             </Button>
           </Link>
           
           <Link href="/jobs/hunt">
-            <Button variant="ghost" className="w-full justify-start gap-3 px-2">
-              <SearchCode className="h-5 w-5" />
+            <Button variant="ghost" className="w-full justify-start gap-3 px-2.5">
+              <SearchCode className="h-4.5 w-4.5" />
               Midnight Job Hunt
             </Button>
           </Link>
 
           <Link href="/jobs/kanban">
-            <Button variant="ghost" className="w-full justify-start gap-3 px-2">
-              <KanbanSquare className="h-5 w-5" />
+            <Button variant="ghost" className="w-full justify-start gap-3 px-2.5">
+              <KanbanSquare className="h-4.5 w-4.5" />
               Job Kanban
             </Button>
           </Link>
 
-          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mt-8 mb-4 px-2">
+          <div className="mb-3 mt-7 px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             AI Tools
           </div>
           <Link href="/resume">
-            <Button variant="ghost" className="w-full justify-start gap-3 px-2">
-              <FileText className="h-5 w-5" />
+            <Button variant="ghost" className="w-full justify-start gap-3 px-2.5">
+              <FileText className="h-4.5 w-4.5" />
               Build Resume
             </Button>
           </Link>
           <Link href="/ai-cover-letter">
-            <Button variant="ghost" className="w-full justify-start gap-3 px-2">
-              <PenBox className="h-5 w-5" />
+            <Button variant="ghost" className="w-full justify-start gap-3 px-2.5">
+              <PenBox className="h-4.5 w-4.5" />
               Cover Letter
             </Button>
           </Link>
           <Link href="/interview">
-            <Button variant="ghost" className="w-full justify-start gap-3 px-2">
-              <GraduationCap className="h-5 w-5" />
+            <Button variant="ghost" className="w-full justify-start gap-3 px-2.5">
+              <GraduationCap className="h-4.5 w-4.5" />
               Interview Prep
             </Button>
           </Link>
 
-          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mt-8 mb-4 px-2">
+          <div className="mb-3 mt-7 px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             Advanced AI
           </div>
           <Link href="/advanced/reverse-recruiter">
-            <Button variant="ghost" className="w-full justify-start gap-3 px-2">
-              <Network className="h-5 w-5" />
+            <Button variant="ghost" className="w-full justify-start gap-3 px-2.5">
+              <Network className="h-4.5 w-4.5" />
               Reverse Recruiter
             </Button>
           </Link>
           <Link href="/advanced/github-analyzer">
-            <Button variant="ghost" className="w-full justify-start gap-3 px-2">
-              <Github className="h-5 w-5" />
+            <Button variant="ghost" className="w-full justify-start gap-3 px-2.5">
+              <Github className="h-4.5 w-4.5" />
               GitHub Analyzer
             </Button>
           </Link>
           <Link href="/advanced/company-intel">
-            <Button variant="ghost" className="w-full justify-start gap-3 px-2">
-              <Building2 className="h-5 w-5" />
+            <Button variant="ghost" className="w-full justify-start gap-3 px-2.5">
+              <Building2 className="h-4.5 w-4.5" />
               Company Intel
             </Button>
           </Link>
           <Link href="/advanced/drip-campaigns">
-            <Button variant="ghost" className="w-full justify-start gap-3 px-2">
-              <Mail className="h-5 w-5" />
+            <Button variant="ghost" className="w-full justify-start gap-3 px-2.5">
+              <Mail className="h-4.5 w-4.5" />
               Cold Email Drip
             </Button>
           </Link>
           <Link href="/advanced/offer-copilot">
-            <Button variant="ghost" className="w-full justify-start gap-3 px-2">
-              <Scale className="h-5 w-5" />
+            <Button variant="ghost" className="w-full justify-start gap-3 px-2.5">
+              <Scale className="h-4.5 w-4.5" />
               Offer Copilot
             </Button>
           </Link>
           <Link href="/advanced/interview-simulator">
-            <Button variant="ghost" className="w-full justify-start gap-3 px-2 text-primary hover:text-primary hover:bg-primary/10">
-              <MessageSquare className="h-5 w-5" />
+            <Button variant="ghost" className="w-full justify-start gap-3 px-2.5">
+              <MessageSquare className="h-4.5 w-4.5" />
               Interview Simulator
             </Button>
           </Link>
           <Link href="/advanced/telegram-sniper">
-            <Button variant="ghost" className="w-full justify-start gap-3 px-2 text-primary hover:text-primary hover:bg-primary/10">
-              <Bot className="h-5 w-5" />
+            <Button variant="ghost" className="w-full justify-start gap-3 px-2.5">
+              <Bot className="h-4.5 w-4.5" />
               Telegram Sniper
             </Button>
           </Link>
         </SignedIn>
       </nav>
 
-      <div className="border-t">
+      <div className="border-t border-border/60">
         <SignedIn>
           {/* Gmail Connection Status */}
           <div className="px-4 pt-3 pb-1">
-            <GmailConnectButton isConnected={isGmailConnected} />
+            <GmailConnectButton
+              isConnected={isGmailConnected}
+              needsReconnect={needsGmailReconnect}
+            />
           </div>
 
           {/* Account */}
-          <div className="p-4 pt-2 flex items-center justify-between px-6">
-            <span className="text-sm font-medium">My Account</span>
+          <div className="flex items-center justify-between p-4 px-6 pt-2">
+            <span className="text-sm font-medium">Account</span>
             <UserButton
               appearance={{
                 elements: {
