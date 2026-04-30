@@ -607,10 +607,26 @@ export async function runMyNightlyHunt() {
       const botToken = process.env.TELEGRAM_BOT_TOKEN;
       if (botToken) {
           const telegramApiUrl = `https://api.telegram.org/bot${botToken}/sendMessage`;
+          const topJobs = Array.isArray(result.newApplications)
+            ? result.newApplications
+                .slice(0, 3)
+                .map((app, idx) => {
+                  const title = app?.job?.title || "Job opportunity";
+                  const company = app?.job?.company || "Unknown company";
+                  const link = app?.job?.sourceLink || "";
+                  const safeTitle = String(title).replace(/[<&>]/g, "");
+                  const safeCompany = String(company).replace(/[<&>]/g, "");
+                  return link
+                    ? `${idx + 1}. <b>${safeTitle}</b> @ ${safeCompany}\n${link}`
+                    : `${idx + 1}. <b>${safeTitle}</b> @ ${safeCompany}`;
+                })
+            : [];
           const messageText = [
             "<b>Sniper Alert</b>",
             "",
             `Found <b>${result.totals.createdApplications}</b> new matching job(s).`,
+            ...topJobs,
+            "",
             "Open your Kanban board now.",
           ].join("\n");
           
