@@ -309,9 +309,9 @@ function JobsKanbanContent() {
               applications={pipelineApplications}
               onStatusChange={async (id, status) => {
                 await updateApplicationStatus(id, status);
-                await loadJobs();
+                await loadJobs(true);
               }}
-              onRefresh={loadJobs}
+              onRefresh={() => loadJobs(true)}
               isGmailConnected={isGmailConnected}
               isOver={activeColumn === column}
             />

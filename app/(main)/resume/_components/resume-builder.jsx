@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -38,6 +38,7 @@ export default function ResumeBuilder({ initialContent, resumeId, existingAtsSco
   const { user } = useUser();
   const [resumeMode, setResumeMode] = useState("preview");
   const [currentResumeId, setCurrentResumeId] = useState(resumeId);
+  const aiResumeMakerRef = useRef(null);
 
   const {
     control,
@@ -123,12 +124,31 @@ export default function ResumeBuilder({ initialContent, resumeId, existingAtsSco
 
   const [isGenerating, setIsGenerating] = useState(false);
 
+  const getPdfSourceElement = () => {
+    const markdownPreview = document.getElementById("resume-pdf");
+    if (markdownPreview) return markdownPreview;
+
+    const aiMakerPreview = document.getElementById("pdf-resume-preview");
+    if (aiMakerPreview) return aiMakerPreview;
+
+    return null;
+  };
+
   const generatePDF = async () => {
     setIsGenerating(true);
     try {
       const html2pdfModule = await import("html2pdf.js");
       const html2pdf = html2pdfModule.default || html2pdfModule;
-      const element = document.getElementById("resume-pdf");
+      const element = getPdfSourceElement();
+      if (!element) {
+        if (activeTab === "ai-maker") {
+          throw new Error(
+            "In AI Resume Maker, go to the final Download step and use Download PDF there."
+          );
+        }
+        throw new Error("Resume preview not ready. Open Markdown tab and try again.");
+      }
+
       const opt = {
         margin: [15, 15],
         filename: "resume.pdf",
@@ -138,25 +158,47 @@ export default function ResumeBuilder({ initialContent, resumeId, existingAtsSco
       };
 
       await html2pdf().set(opt).from(element).save();
+      toast.success("PDF downloaded");
     } catch (error) {
       console.error("PDF generation error:", error);
+      toast.error(error.message || "Failed to generate PDF");
     } finally {
       setIsGenerating(false);
     }
   };
 
-  const onSubmit = async (data) => {
-    try {
-      const formattedContent = previewContent
-        .replace(/\n/g, "\n") // Normalize newlines
-        .replace(/\n\s*\n/g, "\n\n") // Normalize multiple newlines to double newlines
-        .trim();
+  const onSubmit = async () => {
+    const contentToSave = (previewContent || "").trim();
+    if (!contentToSave) {
+      toast.error("Nothing to save yet. Build or edit your resume first.");
+      return;
+    }
 
-      console.log(previewContent, formattedContent);
-      await saveResumeFn(previewContent);
+    try {
+      await saveResumeFn(contentToSave);
     } catch (error) {
       console.error("Save error:", error);
+      toast.error(error.message || "Failed to save resume");
     }
+  };
+
+  const onInvalid = () => {
+    toast.error(
+      "Please complete required fields first, or switch to Markdown/AI Maker save actions."
+    );
+  };
+
+  const handleSaveFromToolbar = async () => {
+    if (activeTab === "ai-maker") {
+      if (!aiResumeMakerRef.current?.saveFromToolbar) {
+        toast.error("AI Resume Maker is not ready yet.");
+        return;
+      }
+      await aiResumeMakerRef.current.saveFromToolbar();
+      return;
+    }
+
+    handleSubmit(onSubmit, onInvalid)();
   };
 
   return (
@@ -168,7 +210,7 @@ export default function ResumeBuilder({ initialContent, resumeId, existingAtsSco
         <div className="space-x-2">
           <Button
             variant="destructive"
-            onClick={handleSubmit(onSubmit)}
+            onClick={handleSaveFromToolbar}
             disabled={isSaving}
           >
             {isSaving ? (
@@ -431,7 +473,7 @@ export default function ResumeBuilder({ initialContent, resumeId, existingAtsSco
               preview={resumeMode}
             />
           </div>
-          <div className="absolute top-[10000px] left-[10000px] pointer-events-none">
+          <div className="fixed -top-[9999px] -left-[9999px] pointer-events-none">
             <div id="resume-pdf" className="bg-white">
               <MDEditor.Markdown
                 source={previewContent}
@@ -457,7 +499,7 @@ export default function ResumeBuilder({ initialContent, resumeId, existingAtsSco
         </TabsContent>
 
         <TabsContent value="ai-maker" className="m-0 mt-0">
-          <AIResumeMaker />
+          <AIResumeMaker ref={aiResumeMakerRef} />
         </TabsContent>
 
         <TabsContent value="saved" className="m-0 mt-0">

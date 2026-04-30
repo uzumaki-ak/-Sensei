@@ -42,6 +42,7 @@ model User {
   promptEvalRuns      PromptEvalRun[]
   personalChatSessions PersonalChatSession[]
   personalChatMessages PersonalChatMessage[]
+  telegramApprovalSessions TelegramApprovalSession[]
 }
 
 model Assessment {
@@ -151,6 +152,7 @@ model JobApplication {
   multiAgentRuns      MultiAgentRun[]
   promptEvalRuns      PromptEvalRun[]
   personalChatSessions PersonalChatSession[]
+  telegramApprovalSessions TelegramApprovalSession[]
 
   @@index([userId])
   @@index([jobId])
@@ -444,5 +446,29 @@ model PersonalChatMessage {
 
   @@index([sessionId])
   @@index([userId])
+  @@index([createdAt])
+}
+
+model TelegramApprovalSession {
+  id             String   @id @default(cuid())
+  userId         String
+  applicationId  String
+  chatId         String
+  status         String   @default("PENDING")
+  recipientEmail String?
+  attachmentId   String?
+  resumeId       String?
+  feedback       String?
+  sentAt         DateTime?
+  expiresAt      DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  application    JobApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([applicationId])
+  @@index([chatId, status])
   @@index([createdAt])
 }

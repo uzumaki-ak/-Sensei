@@ -27,15 +27,20 @@ export function useJobsData() {
   const hasFetchedSuccessfullyRef = useRef(false);
   const loadJobsRef = useRef(null);
 
-  const loadJobs = useCallback(async (force = false) => {
+  const loadJobs = useCallback(async (force = false, options = {}) => {
+    const silent =
+      typeof options === "boolean"
+        ? options
+        : Boolean(options?.silent);
+
     // Prevent concurrent fetches
     if (isFetchingRef.current) return;
 
-    // Prevent refetching after initial load (unless force is true)
-    if (hasFetchedSuccessfullyRef.current && !force) return;
-
     isFetchingRef.current = true;
-    setLoading(true);
+    const shouldShowBlockingLoader = !hasFetchedSuccessfullyRef.current && !silent;
+    if (shouldShowBlockingLoader) {
+      setLoading(true);
+    }
 
     try {
       const data = await getJobApplications();
@@ -56,7 +61,7 @@ export function useJobsData() {
       toast.error("Failed to load jobs");
     } finally {
       isFetchingRef.current = false;
-      if (isMountedRef.current) {
+      if (isMountedRef.current && shouldShowBlockingLoader) {
         setLoading(false);
       }
     }
@@ -132,7 +137,17 @@ export function useJobsData() {
 
     // Listen for email drafted events
     channel.bind("email-drafted", (data) => {
-      // Intentionally left empty unless state needs updating
+      setApplications((prev) =>
+        prev.map((app) =>
+          app.id === data.applicationId
+            ? {
+                ...app,
+                draftEmail: data.draftEmail ?? app.draftEmail,
+                resumeId: data.resumeId ?? app.resumeId,
+              }
+            : app
+        )
+      );
     });
 
     return () => {

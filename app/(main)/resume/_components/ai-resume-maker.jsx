@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { forwardRef, useState, useRef, useEffect, useImperativeHandle } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -37,7 +37,7 @@ import { TEMPLATES } from "./resume-templates";
 
 const STEPS = ["select-job", "answer-questions", "review", "pick-template", "download"];
 
-export default function AIResumeMaker() {
+const AIResumeMaker = forwardRef(function AIResumeMaker(_props, ref) {
   const [step, setStep] = useState("select-job");
   const [jobs, setJobs] = useState([]);
   const [loadingJobs, setLoadingJobs] = useState(false);
@@ -196,6 +196,11 @@ export default function AIResumeMaker() {
   };
 
   const handleSaveResume = async () => {
+    if (!selectedApp || !resumeData) {
+      toast.error("Build your AI resume first, then save it.");
+      return false;
+    }
+
     setIsSaving(true);
     try {
       await saveTailoredResume({
@@ -203,12 +208,24 @@ export default function AIResumeMaker() {
         jobApplicationId: selectedApp.id,
       });
       toast.success("Resume saved! You can now use it for email attachments.");
+      return true;
     } catch (error) {
       toast.error(error.message);
+      return false;
     } finally {
       setIsSaving(false);
     }
   };
+
+  useImperativeHandle(ref, () => ({
+    saveFromToolbar: async () => {
+      if (isSaving) {
+        toast.info("Already saving AI resume...");
+        return false;
+      }
+      return handleSaveResume();
+    },
+  }));
 
   const answeredCount = answers.filter((a) => a && a !== "").length;
   const progress = questions.length > 0 ? (answeredCount / questions.length) * 100 : 0;
@@ -592,4 +609,6 @@ export default function AIResumeMaker() {
       )}
     </div>
   );
-}
+});
+
+export default AIResumeMaker;

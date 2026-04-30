@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Progress } from "@/components/ui/progress";
-import { checkResumeATS } from "@/actions/resume";
+import { checkResumeATS, getAllResumes } from "@/actions/resume";
 import {
   Loader2,
   ShieldCheck,
@@ -114,7 +113,10 @@ function CategoryCard({ icon: Icon, label, score, weight, issues, expanded, onTo
 
 export default function ATSScorePanel({ resumeId, existingScore, existingFeedback }) {
   const [isChecking, setIsChecking] = useState(false);
+  const [isLoadingResumes, setIsLoadingResumes] = useState(false);
   const [jobDescription, setJobDescription] = useState("");
+  const [resumes, setResumes] = useState([]);
+  const [selectedResumeId, setSelectedResumeId] = useState(resumeId || "");
   const [result, setResult] = useState(() => {
     if (existingFeedback) {
       try {
@@ -127,16 +129,70 @@ export default function ATSScorePanel({ resumeId, existingScore, existingFeedbac
   });
   const [expandedCategory, setExpandedCategory] = useState(null);
 
+  useEffect(() => {
+    const loadResumes = async () => {
+      setIsLoadingResumes(true);
+      try {
+        const list = await getAllResumes();
+        setResumes(list || []);
+
+        const preferredId =
+          (list || []).find((item) => item.id === resumeId)?.id ||
+          selectedResumeId ||
+          list?.[0]?.id ||
+          "";
+        setSelectedResumeId(preferredId);
+      } catch (error) {
+        toast.error(error.message || "Failed to load resumes");
+      } finally {
+        setIsLoadingResumes(false);
+      }
+    };
+
+    loadResumes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumeId]);
+
+  useEffect(() => {
+    const selectedResume = resumes.find((item) => item.id === selectedResumeId);
+    if (!selectedResume?.feedback) {
+      setResult(null);
+      setExpandedCategory(null);
+      return;
+    }
+
+    try {
+      setResult(JSON.parse(selectedResume.feedback));
+      setExpandedCategory(null);
+    } catch {
+      setResult(null);
+      setExpandedCategory(null);
+    }
+  }, [selectedResumeId, resumes]);
+
+  const selectedResume = resumes.find((item) => item.id === selectedResumeId);
+
   const handleCheck = async () => {
-    if (!resumeId) {
+    if (!selectedResumeId) {
       toast.error("Save your resume first");
       return;
     }
 
     setIsChecking(true);
     try {
-      const atsResult = await checkResumeATS(resumeId, jobDescription);
+      const atsResult = await checkResumeATS(selectedResumeId, jobDescription);
       setResult(atsResult);
+      setResumes((prev) =>
+        prev.map((item) =>
+          item.id === selectedResumeId
+            ? {
+                ...item,
+                atsScore: atsResult.overallScore,
+                feedback: JSON.stringify(atsResult),
+              }
+            : item
+        )
+      );
       toast.success(`ATS Score: ${Math.round(atsResult.overallScore)}%`);
     } catch (error) {
       toast.error(error.message || "ATS check failed");
@@ -145,7 +201,7 @@ export default function ATSScorePanel({ resumeId, existingScore, existingFeedbac
     }
   };
 
-  if (!resumeId) {
+  if (!resumeId && !isLoadingResumes && resumes.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <ShieldCheck className="h-10 w-10 text-muted-foreground/30 mb-3" />
@@ -158,6 +214,33 @@ export default function ATSScorePanel({ resumeId, existingScore, existingFeedbac
 
   return (
     <div className="space-y-4">
+      <div className="space-y-2">
+        <label className="text-xs font-medium text-muted-foreground uppercase">
+          Resume Selector
+        </label>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <select
+            value={selectedResumeId}
+            onChange={(e) => setSelectedResumeId(e.target.value)}
+            className="h-10 rounded-md border bg-background px-3 text-sm w-full sm:max-w-md"
+            disabled={isLoadingResumes || resumes.length === 0}
+          >
+            {resumes.length === 0 && <option value="">No resumes found</option>}
+            {resumes.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name || "Untitled Resume"} {item.atsScore ? `• ATS ${Math.round(item.atsScore)}%` : ""}
+              </option>
+            ))}
+          </select>
+          {isLoadingResumes && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Loading resumes...
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Job Description Input */}
       <div className="space-y-2">
         <label className="text-xs font-medium text-muted-foreground uppercase">
@@ -189,6 +272,10 @@ export default function ATSScorePanel({ resumeId, existingScore, existingFeedbac
       {/* Results */}
       {result && (
         <div className="space-y-4 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
+          <div className="text-xs text-muted-foreground">
+            Showing ATS for: <span className="font-medium text-foreground">{selectedResume?.name || "Selected Resume"}</span>
+          </div>
+
           {/* Overall Score */}
           <div className="flex items-center gap-5 p-4 rounded-xl border bg-muted/20">
             <ScoreRing score={result.overallScore} />
@@ -265,6 +352,37 @@ export default function ATSScorePanel({ resumeId, existingScore, existingFeedbac
               </ul>
             </div>
           )}
+        </div>
+      )}
+
+      {resumes.length > 0 && (
+        <div className="p-3 rounded-lg border bg-muted/10">
+          <p className="text-xs font-semibold uppercase text-muted-foreground mb-2">
+            Resume ATS History
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {resumes.map((item) => {
+              const isActive = item.id === selectedResumeId;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setSelectedResumeId(item.id)}
+                  className={`rounded-md border px-2.5 py-1.5 text-left text-xs transition-colors ${
+                    isActive
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-background hover:bg-muted/30"
+                  }`}
+                >
+                  <span className="block max-w-[220px] truncate font-medium">
+                    {item.name || "Untitled Resume"}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">
+                    {item.atsScore ? `ATS ${Math.round(item.atsScore)}%` : "No ATS run yet"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
