@@ -48,6 +48,20 @@ export default function GlobalHelpBubble() {
     hasMoved: false,
   });
 
+  const resetDragState = () => {
+    dragStateRef.current = {
+      active: false,
+      pointerId: null,
+      startPointerX: 0,
+      startPointerY: 0,
+      startX: 0,
+      startY: 0,
+      width: 0,
+      height: 0,
+      hasMoved: false,
+    };
+  };
+
   const hideOnRoute = useMemo(() => {
     if (!pathname) return false;
     return pathname.startsWith("/advanced/personal-chatbot");
@@ -103,6 +117,23 @@ export default function GlobalHelpBubble() {
   }, [position]);
 
   useEffect(() => {
+    const endAnyActiveDrag = () => {
+      if (!dragStateRef.current.active) return;
+      resetDragState();
+    };
+
+    window.addEventListener("pointerup", endAnyActiveDrag);
+    window.addEventListener("pointercancel", endAnyActiveDrag);
+    window.addEventListener("blur", endAnyActiveDrag);
+
+    return () => {
+      window.removeEventListener("pointerup", endAnyActiveDrag);
+      window.removeEventListener("pointercancel", endAnyActiveDrag);
+      window.removeEventListener("blur", endAnyActiveDrag);
+    };
+  }, []);
+
+  useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
     container.scrollTop = container.scrollHeight;
@@ -142,6 +173,13 @@ export default function GlobalHelpBubble() {
 
   const beginDrag = (event) => {
     if (!event.isPrimary) return;
+    const interactiveTarget =
+      event.target instanceof Element
+        ? event.target.closest(
+            "[data-no-drag='true'],button,a,input,textarea,select"
+          )
+        : null;
+    if (interactiveTarget) return;
     const root = bubbleRootRef.current;
     if (!root) return;
 
@@ -196,17 +234,7 @@ export default function GlobalHelpBubble() {
       }, 0);
     }
 
-    dragStateRef.current = {
-      active: false,
-      pointerId: null,
-      startPointerX: 0,
-      startPointerY: 0,
-      startX: 0,
-      startY: 0,
-      width: 0,
-      height: 0,
-      hasMoved: false,
-    };
+    resetDragState();
 
     event.currentTarget.releasePointerCapture?.(event.pointerId);
   };
@@ -283,7 +311,7 @@ export default function GlobalHelpBubble() {
   return (
     <div
       ref={bubbleRootRef}
-      className={`fixed z-[70] ${position ? "" : "bottom-3 right-2 sm:bottom-5 sm:right-5"}`}
+      className={`fixed z-[40] ${position ? "" : "bottom-3 right-2 sm:bottom-5 sm:right-5"}`}
       style={position ? { left: `${position.x}px`, top: `${position.y}px` } : undefined}
     >
       {hintVisible ? (
@@ -308,18 +336,34 @@ export default function GlobalHelpBubble() {
 
       {open ? (
         <div className="mb-2 w-[min(380px,calc(100vw-1rem))] rounded-sm border border-border/70 bg-background/95 p-3 shadow-lg backdrop-blur">
-          <div
-            className="mb-2 flex cursor-move touch-none select-none items-center justify-between gap-2"
-            onPointerDown={beginDrag}
-            onPointerMove={updateDrag}
-            onPointerUp={endDrag}
-            onPointerCancel={endDrag}
-          >
-            <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <button
+              type="button"
+              className="flex cursor-move touch-none select-none items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+              onPointerDown={beginDrag}
+              onPointerMove={updateDrag}
+              onPointerUp={endDrag}
+              onPointerCancel={endDrag}
+              aria-label="Drag help bubble"
+              title="Drag"
+            >
               <Sparkles className="h-3.5 w-3.5" />
               Personal Copilot
-            </p>
-            <Button type="button" size="icon" variant="ghost" className="h-7 w-7" onClick={() => setOpen(false)}>
+            </button>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              data-no-drag="true"
+              onPointerDown={(event) => {
+                event.stopPropagation();
+              }}
+              onClick={(event) => {
+                event.stopPropagation();
+                setOpen(false);
+              }}
+            >
               <X className="h-4 w-4" />
             </Button>
           </div>

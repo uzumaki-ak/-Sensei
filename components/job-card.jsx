@@ -6,7 +6,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { generateApplicationEmail, getGmailAuthUrl, sendOutreachEmail, updateRecruiterEmail, getResumeRecommendations } from "@/actions/jobs";
+import {
+  generateApplicationEmail,
+  getGmailAuthUrl,
+  getResumeRecommendations,
+  requestTelegramApproval,
+  sendOutreachEmail,
+  updateRecruiterEmail,
+} from "@/actions/jobs";
 import { toast } from "sonner";
 import { isHttpUrl } from "@/lib/jobs-ingestion";
 import {
@@ -38,10 +45,15 @@ const COLUMNS = ["To Apply", "Applied", "Interviewing", "Offer", "Rejected"];
 export default function JobCard({ app, onStatusChange, onRefresh, isGmailConnected }) {
   const [isGenerating, startTransition] = useTransition();
   const [isSending, setIsSending] = useState(false);
+  const [isRequestingTelegramApproval, setIsRequestingTelegramApproval] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [recruiterEmail, setRecruiterEmail] = useState(app.job.recruiterEmail || "");
   const [emailInput, setEmailInput] = useState(app.job.recruiterEmail || "");
   const [isEditingEmail, setIsEditingEmail] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [draftEmail, setDraftEmail] = useState(app.draftEmail || "");
+  const [isEmailSent, setIsEmailSent] = useState(app.emailSent);
+  const [currentResumeId, setCurrentResumeId] = useState(app.resumeId || null);
   const [selectedAttachment, setSelectedAttachment] = useState(app.attachmentId || null);
   const [attachmentName, setAttachmentName] = useState(app.attachmentName || null);
   const [isUploading, setIsUploading] = useState(false);
@@ -54,9 +66,31 @@ export default function JobCard({ app, onStatusChange, onRefresh, isGmailConnect
   const [isRegenerating, setIsRegenerating] = useState(false);
 
   const canOpenSourceLink = isHttpUrl(app.job.sourceLink);
-  const hasRecruiterEmail = Boolean(app.job.recruiterEmail);
-  const hasDraftEmail = Boolean(app.draftEmail);
-  const emailSent = app.emailSent;
+  const hasRecruiterEmail = Boolean(recruiterEmail);
+  const hasDraftEmail = Boolean(draftEmail);
+  const emailSent = isEmailSent;
+  const effectiveAttachmentId = selectedAttachment;
+  const hasResumeAttachment = Boolean(effectiveAttachmentId);
+
+  useEffect(() => {
+    setRecruiterEmail(app.job.recruiterEmail || "");
+    setDraftEmail(app.draftEmail || "");
+    setIsEmailSent(app.emailSent);
+    setCurrentResumeId(app.resumeId || null);
+    setSelectedAttachment(app.attachmentId || null);
+    setAttachmentName(app.attachmentName || null);
+    if (!isEditingEmail) {
+      setEmailInput(app.job.recruiterEmail || "");
+    }
+  }, [
+    app.job.recruiterEmail,
+    app.draftEmail,
+    app.emailSent,
+    app.resumeId,
+    app.attachmentId,
+    app.attachmentName,
+    isEditingEmail,
+  ]);
 
   // Load resumes and recommendations when dialog opens
   useEffect(() => {
@@ -65,13 +99,19 @@ export default function JobCard({ app, onStatusChange, onRefresh, isGmailConnect
     }
   }, [dialogOpen]);
 
+  useEffect(() => {
+    if (!selectedResumeId && currentResumeId) {
+      setSelectedResumeId(currentResumeId);
+    }
+  }, [selectedResumeId, currentResumeId]);
+
   const loadResumeRecommendations = async () => {
     setIsLoadingResumes(true);
     try {
       const result = await getResumeRecommendations(app.id);
       setResumeRecommendations(result);
       setResumes(result.allScores.map(s => s.resume).filter(Boolean));
-      if (result.recommendedResume && !selectedResumeId) {
+      if (result.recommendedResume && !selectedResumeId && !currentResumeId) {
         setSelectedResumeId(result.recommendedResume.id);
       }
     } catch (error) {
@@ -85,8 +125,16 @@ export default function JobCard({ app, onStatusChange, onRefresh, isGmailConnect
     startTransition(async () => {
       try {
         const result = await generateApplicationEmail(app.id, selectedResumeId);
+        if (!result?.success) {
+          toast.error(result?.error || "Failed to draft email for this job.");
+          return;
+        }
+
+        setDraftEmail(result.draftEmail || "");
+        setCurrentResumeId(result.resumeUsed?.id || selectedResumeId || null);
+        setDialogOpen(false);
         toast.success(`AI Draft generated using "${result.resumeUsed?.name || "your resume"}"!`);
-        onRefresh();
+        await onRefresh?.();
       } catch (error) {
         toast.error(error.message);
       }
@@ -97,8 +145,15 @@ export default function JobCard({ app, onStatusChange, onRefresh, isGmailConnect
     setIsRegenerating(true);
     try {
       const result = await generateApplicationEmail(app.id, selectedResumeId);
+      if (!result?.success) {
+        toast.error(result?.error || "Failed to regenerate email.");
+        return;
+      }
+
+      setDraftEmail(result.draftEmail || "");
+      setCurrentResumeId(result.resumeUsed?.id || selectedResumeId || null);
       toast.success(`Email regenerated with "${result.resumeUsed?.name}"!`);
-      onRefresh();
+      await onRefresh?.();
     } catch (error) {
       toast.error(error.message);
     } finally {
@@ -122,27 +177,67 @@ export default function JobCard({ app, onStatusChange, onRefresh, isGmailConnect
     }
     try {
       await updateRecruiterEmail(app.job.id, emailInput);
+      setRecruiterEmail(emailInput.trim());
       toast.success("Email saved!");
       setIsEditingEmail(false);
-      onRefresh();
+      await onRefresh?.();
     } catch (error) {
       toast.error(error.message || "Failed to save email");
     }
   };
 
   const handleSendEmail = async () => {
+    if (!hasResumeAttachment) {
+      toast.error("Attach your resume file before sending.");
+      return;
+    }
+
     setIsSending(true);
     try {
       // Use custom email if edited, otherwise use the job's email
-      const emailToUse = isEditingEmail ? emailInput : app.job.recruiterEmail;
-      await sendOutreachEmail(app.id, emailToUse || null, selectedAttachment || null);
+      const emailToUse = isEditingEmail ? emailInput : recruiterEmail;
+      const result = await sendOutreachEmail(
+        app.id,
+        emailToUse || null,
+        selectedAttachment || null
+      );
+      if (!result?.success) {
+        toast.error(result?.error || "Failed to send outreach email.");
+        return;
+      }
+      setIsEmailSent(true);
       toast.success("Email sent to recruiter!");
       setDialogOpen(false);
-      onRefresh();
+      await onRefresh?.();
     } catch (error) {
       toast.error(error.message);
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const handleRequestTelegramApproval = async () => {
+    if (!hasResumeAttachment) {
+      toast.error("Attach your resume file before requesting Telegram approval.");
+      return;
+    }
+
+    setIsRequestingTelegramApproval(true);
+    try {
+      const emailToUse = isEditingEmail ? emailInput : recruiterEmail;
+      const result = await requestTelegramApproval(app.id, {
+        recipientEmail: emailToUse || null,
+        attachmentId: selectedAttachment || null,
+      });
+      if (!result?.success) {
+        toast.error(result?.error || "Failed to send Telegram approval request.");
+        return;
+      }
+      toast.success("Approval request sent to Telegram.");
+    } catch (error) {
+      toast.error(error.message || "Failed to send Telegram approval request.");
+    } finally {
+      setIsRequestingTelegramApproval(false);
     }
   };
 
@@ -181,7 +276,7 @@ export default function JobCard({ app, onStatusChange, onRefresh, isGmailConnect
         setSelectedAttachment(data.attachmentId);
         setAttachmentName(data.fileName);
         toast.success("Resume attached!");
-        onRefresh();
+        await onRefresh?.();
       } else {
         throw new Error("Upload failed");
       }
@@ -193,22 +288,25 @@ export default function JobCard({ app, onStatusChange, onRefresh, isGmailConnect
   };
 
   const handleRemoveAttachment = async () => {
+    if (!selectedAttachment) {
+      return;
+    }
     try {
-      await fetch(`/api/upload?id=${selectedAttachment || app.attachmentId}`, {
+      await fetch(`/api/upload?id=${selectedAttachment}`, {
         method: "DELETE",
       });
       setSelectedAttachment(null);
       setAttachmentName(null);
       toast.success("Attachment removed");
-      onRefresh();
+      await onRefresh?.();
     } catch (error) {
       toast.error("Failed to remove attachment");
     }
   };
 
   const copyToClipboard = () => {
-    if (!app.draftEmail) return;
-    navigator.clipboard.writeText(app.draftEmail);
+    if (!draftEmail) return;
+    navigator.clipboard.writeText(draftEmail);
     setCopied(true);
     toast.success("Copied to clipboard");
     setTimeout(() => setCopied(false), 2000);
@@ -340,7 +438,7 @@ export default function JobCard({ app, onStatusChange, onRefresh, isGmailConnect
                            </div>
                          )}
 
-                         {selectedResumeId && selectedResumeId !== app.resumeId && (
+                        {selectedResumeId && selectedResumeId !== currentResumeId && (
                            <Button
                              size="sm"
                              variant="secondary"
@@ -383,15 +481,15 @@ export default function JobCard({ app, onStatusChange, onRefresh, isGmailConnect
                    ) : (
                      <div className="flex items-center justify-between">
                        <span className={`text-sm ${hasRecruiterEmail ? 'text-foreground' : 'text-amber-600'}`}>
-                         {hasRecruiterEmail ? app.job.recruiterEmail : "No email found - click edit to add"}
+                        {hasRecruiterEmail ? recruiterEmail : "No email found - click edit to add"}
                        </span>
                        <Button
                          size="sm"
                          variant="ghost"
                          onClick={() => {
-                           setEmailInput(app.job.recruiterEmail || "");
-                           setIsEditingEmail(true);
-                         }}
+                          setEmailInput(recruiterEmail || "");
+                          setIsEditingEmail(true);
+                        }}
                        >
                          <Edit3 className="h-4 w-4" />
                        </Button>
@@ -405,13 +503,13 @@ export default function JobCard({ app, onStatusChange, onRefresh, isGmailConnect
                       Attachment (Resume/CV)
                     </label>
                     
-                    {attachmentName || app.attachmentName ? (
+                    {attachmentName ? (
                       <div className="flex items-center justify-between">
                         <span className="text-sm flex items-center gap-2">
                           <svg className="h-4 w-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                           </svg>
-                          {attachmentName || app.attachmentName}
+                          {attachmentName}
                         </span>
                         <Button 
                           size="sm" 
@@ -464,8 +562,8 @@ export default function JobCard({ app, onStatusChange, onRefresh, isGmailConnect
                     </div>
                   )}
 
-                  <div className="bg-muted p-4 rounded-lg whitespace-pre-wrap text-sm font-mono border mt-4">
-                    {app.draftEmail}
+                 <div className="bg-muted p-4 rounded-lg whitespace-pre-wrap text-sm font-mono border mt-4">
+                    {draftEmail}
                   </div>
                  <div className="flex justify-end gap-2 mt-4">
                     <Button variant="outline" onClick={copyToClipboard} className="gap-2">
@@ -473,15 +571,39 @@ export default function JobCard({ app, onStatusChange, onRefresh, isGmailConnect
                       {copied ? "Copied" : "Copy Content"}
                     </Button>
 
+                    {!emailSent ? (
+                      <Button
+                        variant="secondary"
+                        onClick={handleRequestTelegramApproval}
+                        disabled={
+                          isRequestingTelegramApproval ||
+                          !isGmailConnected ||
+                          (!hasRecruiterEmail && !emailInput) ||
+                          !hasResumeAttachment
+                        }
+                        className="gap-2"
+                      >
+                        {isRequestingTelegramApproval ? (
+                          <><Loader2 className="h-4 w-4 animate-spin" /> Sending to Telegram...</>
+                        ) : (
+                          "Approve in Telegram"
+                        )}
+                      </Button>
+                    ) : null}
+
                     {emailSent ? (
                       <Button disabled variant="secondary" className="gap-2">
                         <CheckCircle2 className="h-4 w-4 text-green-500" />
-                        Sent on {new Date(app.emailSentAt).toLocaleDateString()}
+                        Sent {app.emailSentAt ? `on ${new Date(app.emailSentAt).toLocaleDateString()}` : "just now"}
                       </Button>
                     ) : isGmailConnected ? (
                       <Button
                         onClick={handleSendEmail}
-                        disabled={isSending || (!hasRecruiterEmail && !emailInput)}
+                        disabled={
+                          isSending ||
+                          (!hasRecruiterEmail && !emailInput) ||
+                          !hasResumeAttachment
+                        }
                         className="gap-2 bg-blue-600 hover:bg-blue-700"
                       >
                         {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
@@ -493,9 +615,14 @@ export default function JobCard({ app, onStatusChange, onRefresh, isGmailConnect
                       </Button>
                     )}
                  </div>
+                 {!hasResumeAttachment ? (
+                   <p className="mt-2 text-xs text-amber-600">
+                     Resume profile is selected, but a PDF/DOCX file is still required to send via Gmail/Telegram approval.
+                   </p>
+                 ) : null}
                  {(!hasRecruiterEmail && !emailInput) ? (
                    <p className="mt-2 text-xs text-amber-600">
-                     Add a recipient email above to send this outreach.
+                     Add a recipient email above to continue.
                    </p>
                  ) : null}
                </DialogContent>
@@ -601,11 +728,11 @@ export default function JobCard({ app, onStatusChange, onRefresh, isGmailConnect
                         <label className="text-[10px] font-bold text-muted-foreground uppercase mb-2 block">
                           Attach Resume PDF (Optional)
                         </label>
-                        {attachmentName || app.attachmentName ? (
+                        {attachmentName ? (
                           <div className="flex items-center justify-between text-xs">
                             <span className="flex items-center gap-1.5 text-primary">
                               <Upload className="h-3 w-3" />
-                              {attachmentName || app.attachmentName}
+                              {attachmentName}
                             </span>
                             <Button size="sm" variant="ghost" onClick={handleRemoveAttachment} className="h-6 text-[10px] text-red-500 hover:text-red-700">
                               Remove
@@ -629,7 +756,10 @@ export default function JobCard({ app, onStatusChange, onRefresh, isGmailConnect
                   ) : (
                     <div className="bg-muted/50 p-4 rounded-lg border border-dashed text-center space-y-3">
                       <p className="text-sm text-muted-foreground">
-                        No resume profiles found. Build one first so the AI can personalize your email.
+                        No resume profiles found. Create one in Resume Studio first so AI can personalize your email.
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Route: /resume
                       </p>
                       <div className="flex gap-2 justify-center">
                         <Button
@@ -643,7 +773,7 @@ export default function JobCard({ app, onStatusChange, onRefresh, isGmailConnect
                         </Button>
                       </div>
                       <p className="text-[10px] text-muted-foreground">
-                        After building a resume, reopen this dialog to generate a personalized email.
+                        After creating a resume profile, reopen this dialog. Resume file attachment upload appears in the email preview step.
                       </p>
                     </div>
                   )}

@@ -4,8 +4,16 @@ import { db } from "@/lib/prisma";
 
 export async function POST(request) {
   try {
-    const { userId } = await auth();
-    if (!userId) return new NextResponse("Unauthorized", { status: 401 });
+    const { userId: clerkUserId } = await auth();
+    if (!clerkUserId) return new NextResponse("Unauthorized", { status: 401 });
+
+    const user = await db.user.findUnique({
+      where: { clerkUserId },
+      select: { id: true },
+    });
+    if (!user) {
+      return new NextResponse("User not found", { status: 404 });
+    }
 
     const formData = await request.formData();
     const file = formData.get("file");
@@ -34,10 +42,18 @@ export async function POST(request) {
     const base64File = buffer.toString("base64");
 
     // Create attachment record
+    const application = await db.jobApplication.findFirst({
+      where: { id: String(applicationId), userId: user.id },
+      select: { id: true },
+    });
+    if (!application) {
+      return new NextResponse("Application not found", { status: 404 });
+    }
+
     const attachment = await db.resumeAttachment.create({
       data: {
-        userId,
-        applicationId,
+        userId: user.id,
+        applicationId: application.id,
         fileName: file.name,
         fileType: file.type,
         fileSize: file.size,
@@ -47,7 +63,7 @@ export async function POST(request) {
 
     // Update job application with attachment ID
     await db.jobApplication.update({
-      where: { id: applicationId },
+      where: { id: application.id },
       data: {
         attachmentId: attachment.id,
         attachmentName: file.name,
@@ -68,8 +84,16 @@ export async function POST(request) {
 
 export async function DELETE(request) {
   try {
-    const { userId } = await auth();
-    if (!userId) return new NextResponse("Unauthorized", { status: 401 });
+    const { userId: clerkUserId } = await auth();
+    if (!clerkUserId) return new NextResponse("Unauthorized", { status: 401 });
+
+    const user = await db.user.findUnique({
+      where: { clerkUserId },
+      select: { id: true },
+    });
+    if (!user) {
+      return new NextResponse("User not found", { status: 404 });
+    }
 
     const { searchParams } = new URL(request.url);
     const attachmentId = searchParams.get("id");
@@ -78,9 +102,21 @@ export async function DELETE(request) {
       return new NextResponse("Missing attachment ID", { status: 400 });
     }
 
-    // Delete attachment
+    const attachment = await db.resumeAttachment.findFirst({
+      where: { id: attachmentId, userId: user.id },
+      select: { id: true, applicationId: true },
+    });
+    if (!attachment) {
+      return new NextResponse("Attachment not found", { status: 404 });
+    }
+
     await db.resumeAttachment.delete({
-      where: { id: attachmentId, userId },
+      where: { id: attachment.id },
+    });
+
+    await db.jobApplication.updateMany({
+      where: { id: attachment.applicationId, userId: user.id, attachmentId: attachment.id },
+      data: { attachmentId: null, attachmentName: null },
     });
 
     return NextResponse.json({ success: true });

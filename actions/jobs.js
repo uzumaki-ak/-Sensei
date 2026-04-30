@@ -14,6 +14,8 @@ import {
   generateEmailWithResume,
 } from "@/lib/resume-selector";
 import { pusherServer } from "@/lib/pusher";
+import { sendOutreachEmailForUser } from "@/lib/outreach-email";
+import { escapeTelegramHtml, sendTelegramMessage } from "@/lib/telegram";
 import {
   createJobPayload,
   isHttpUrl,
@@ -30,6 +32,8 @@ const SCRAPER_TIMEOUT_MS = Number(process.env.HUNT_SCRAPE_TIMEOUT_MS || 30000);
 const MAJOR_SITE_REGEX =
   /linkedin|internshala|indeed|glassdoor|wellfound|otta|naukri|workatastartup|ycombinator|x\.com|twitter\.com/i;
 const ALLOWED_STATUSES = new Set(["Discovered", "To Apply", "Applied", "Interviewing", "Offer", "Rejected"]);
+const TELEGRAM_PENDING_STATUSES = ["PENDING", "AWAITING_FEEDBACK"];
+const TELEGRAM_SESSION_TTL_HOURS = Number(process.env.TELEGRAM_APPROVAL_TTL_HOURS || 24);
 
 function revalidateJobsRoutes() {
   revalidatePath("/jobs");
@@ -44,6 +48,31 @@ function escapeForDoubleQuotes(value) {
 function parseModelJson(text) {
   const cleaned = String(text || "").replace(/```(?:json)?\n?/gi, "").trim();
   return parseJsonFromProcessOutput(cleaned);
+}
+
+function extractEmailSubjectAndBody(draftEmail, fallbackTitle) {
+  const subjectMatch = String(draftEmail || "").match(/\[?Subject:\s*(.+?)\]?(?:\r?\n|$)/i);
+  const subject = subjectMatch?.[1]?.trim() || `Application for ${fallbackTitle || "the role"}`;
+  const body = String(draftEmail || "").replace(/\[?Subject:.*?(?:\r?\n|$)/i, "").trim();
+  return { subject, body };
+}
+
+function truncateTelegramText(value, max = 900) {
+  const text = String(value || "").trim();
+  if (text.length <= max) return text;
+  return `${text.slice(0, max - 1)}…`;
+}
+
+function buildTelegramApprovalKeyboard(sessionId) {
+  return {
+    inline_keyboard: [
+      [
+        { text: "Approve & Send", callback_data: `approve:${sessionId}` },
+        { text: "Ask Redraft", callback_data: `redraft:${sessionId}` },
+      ],
+      [{ text: "Cancel", callback_data: `cancel:${sessionId}` }],
+    ],
+  };
 }
 
 async function runPythonCrawler(url) {
@@ -185,7 +214,7 @@ export async function getGmailAuthUrl() {
 }
 
 export async function updateRecruiterEmail(jobId, email) {
-  const user = await getAuthenticatedUser();
+  await getAuthenticatedUser();
 
   if (!email || !email.includes("@")) {
     throw new Error("Please enter a valid email address");
@@ -202,139 +231,20 @@ export async function updateRecruiterEmail(jobId, email) {
 }
 
 export async function sendOutreachEmail(applicationId, customEmail = null, attachmentId = null) {
-  const user = await getAuthenticatedUser();
-
-  if (!user.gmailToken) {
-    throw new Error("Gmail not connected");
-  }
-
-  const application = await db.jobApplication.findFirst({
-    where: { id: applicationId, userId: user.id },
-    include: { job: true },
-  });
-
-  if (!application || !application.draftEmail) {
-    throw new Error("No draft found");
-  }
-
-  // Use custom email if provided, otherwise fall back to job's recruiter email
-  const recipientEmail = customEmail || application.job.recruiterEmail;
-
-  if (!recipientEmail) {
-    throw new Error("Recruiter email is missing for this job. Add a valid email first.");
-  }
-
-  const oauth2Client = new google.auth.OAuth2(
-    process.env.GMAIL_CLIENT_ID,
-    process.env.GMAIL_CLIENT_SECRET,
-    process.env.GMAIL_REDIRECT_URI
-  );
-  oauth2Client.setCredentials(user.gmailToken);
-
-  const gmail = google.gmail({ version: "v1", auth: oauth2Client });
-
-  const subjectMatch = application.draftEmail.match(/\[?Subject:\s*(.+?)\]?(?:\r?\n|$)/i);
-  const subject = subjectMatch?.[1]?.trim() || `Application for ${application.job.title}`;
-  const body = application.draftEmail.replace(/\[?Subject:.*?(?:\r?\n|$)/i, "").trim();
-
-  let encodedMessage;
-
-  // If attachment exists, send as multipart email
-  if (attachmentId || application.attachmentId) {
-    const attachment = await db.resumeAttachment.findFirst({
-      where: { 
-        id: attachmentId || application.attachmentId,
-        userId: user.id 
-      }
-    });
-
-    if (attachment) {
-      // Create multipart email with attachment
-      const boundary = "----=_NextPart_000_0001_01DBCD56.7B8E4F90";
-      
-      const messageParts = [
-        `--${boundary}`,
-        "Content-Type: text/plain; charset=utf-8",
-        "Content-Transfer-Encoding: 7bit",
-        "",
-        body,
-        "",
-        `--${boundary}`,
-        `Content-Type: ${attachment.fileType}; name="${attachment.fileName}"`,
-        `Content-Disposition: attachment; filename="${attachment.fileName}"`,
-        "Content-Transfer-Encoding: base64",
-        "",
-        attachment.fileData,
-        "",
-        `--${boundary}--`
-      ];
-
-      const fullMessage = [
-        `To: ${recipientEmail}`,
-        `Subject: ${subject}`,
-        "MIME-Version: 1.0",
-        `Content-Type: multipart/mixed; boundary="${boundary}"`,
-        "",
-        messageParts.join("\r\n")
-      ].join("\r\n");
-
-      encodedMessage = Buffer.from(fullMessage)
-        .toString("base64")
-        .replace(/\+/g, "-")
-        .replace(/\//g, "_")
-        .replace(/=+$/, "");
-    }
-  }
-
-  // Fallback to plain text if no attachment
-  if (!encodedMessage) {
-    const utf8Subject = `=?utf-8?B?${Buffer.from(subject).toString("base64")}?=`;
-    const message = [
-      `To: ${recipientEmail}`,
-      "Content-Type: text/plain; charset=utf-8",
-      "MIME-Version: 1.0",
-      `Subject: ${utf8Subject}`,
-      "",
-      body,
-    ].join("\n");
-
-    encodedMessage = Buffer.from(message)
-      .toString("base64")
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/, "");
-  }
-
   try {
-    await gmail.users.messages.send({
-      userId: "me",
-      requestBody: { raw: encodedMessage },
+    const user = await getAuthenticatedUser();
+    const result = await sendOutreachEmailForUser({
+      userId: user.id,
+      applicationId,
+      customEmail,
+      attachmentId,
+      requireAttachment: true,
     });
 
-    // Update application status and mark email as sent
-    await db.jobApplication.update({
-      where: { id: application.id },
-      data: {
-        status: "Applied",
-        appliedAt: new Date(),
-        emailSent: true,
-        emailSentAt: new Date(),
-      },
-    });
-
-    // Also update the job listing with the email if it was custom
-    if (customEmail && !application.job.recruiterEmail) {
-      await db.jobListing.update({
-        where: { id: application.job.id },
-        data: { recruiterEmail: customEmail },
-      });
-    }
-
-    // Broadcast email sent via Pusher
     try {
       await pusherServer.trigger(`user-${user.id}`, "email-sent", {
-        applicationId: application.id,
-        jobId: application.job.id,
+        applicationId: result.applicationId,
+        jobId: result.jobId,
       });
     } catch (pusherError) {
       console.error("[Pusher] Failed to broadcast email sent:", pusherError.message);
@@ -343,8 +253,11 @@ export async function sendOutreachEmail(applicationId, customEmail = null, attac
     revalidateJobsRoutes();
     return { success: true };
   } catch (error) {
-    console.error("Gmail Send Error:", error);
-    throw new Error("Failed to send email. Reconnect Gmail and try again.");
+    console.error("[sendOutreachEmail] Error:", error);
+    return {
+      success: false,
+      error: error?.message || "Failed to send outreach email.",
+    };
   }
 }
 
@@ -407,18 +320,18 @@ export async function scrapeJobUrl(inputUrl) {
  * Email Draft Generation with Smart Resume Selection
  */
 export async function generateApplicationEmail(applicationId, selectedResumeId = null) {
-  const user = await getAuthenticatedUser();
-
-  const application = await db.jobApplication.findFirst({
-    where: { id: applicationId, userId: user.id },
-    include: { job: true },
-  });
-
-  if (!application) {
-    throw new Error("Application not found");
-  }
-
   try {
+    const user = await getAuthenticatedUser();
+
+    const application = await db.jobApplication.findFirst({
+      where: { id: applicationId, userId: user.id },
+      include: { job: true },
+    });
+
+    if (!application) {
+      return { success: false, error: "Application not found." };
+    }
+
     let resumeId = selectedResumeId;
 
     // If no resume selected, use AI to pick the best one
@@ -434,7 +347,8 @@ export async function generateApplicationEmail(applicationId, selectedResumeId =
     try {
       await pusherServer.trigger(`user-${user.id}`, "email-drafted", {
         applicationId,
-        resumeId,
+        resumeId: result.resumeUsed?.id || resumeId || null,
+        draftEmail: result.draftEmail,
         jobId: application.job.id,
       });
     } catch (pusherError) {
@@ -449,7 +363,137 @@ export async function generateApplicationEmail(applicationId, selectedResumeId =
     };
   } catch (error) {
     console.error("Email Agent Failed:", error.message);
-    throw new Error("Failed to draft email for this job.");
+    return {
+      success: false,
+      error: error?.message || "Failed to draft email for this job.",
+    };
+  }
+}
+
+/**
+ * Send a draft to Telegram and wait for explicit approval before sending.
+ */
+export async function requestTelegramApproval(
+  applicationId,
+  { recipientEmail = null, attachmentId = null } = {}
+) {
+  try {
+    const user = await getAuthenticatedUser();
+
+    if (!user.telegramChatId) {
+      return {
+        success: false,
+        error: "Connect Telegram Sniper first to use approval flow.",
+      };
+    }
+    if (!user.gmailToken) {
+      return {
+        success: false,
+        error: "Connect Gmail first to use Telegram approval.",
+      };
+    }
+
+    const application = await db.jobApplication.findFirst({
+      where: { id: applicationId, userId: user.id },
+      include: { job: true, resume: true },
+    });
+
+    if (!application || !application.draftEmail) {
+      return { success: false, error: "Generate a draft email first." };
+    }
+
+    const finalRecipientEmail = String(recipientEmail || application.job.recruiterEmail || "").trim();
+    if (!finalRecipientEmail) {
+      return {
+        success: false,
+        error: "Recruiter email is missing for this job.",
+      };
+    }
+
+    const resolvedAttachmentId = attachmentId || application.attachmentId;
+    if (!resolvedAttachmentId) {
+      return {
+        success: false,
+        error: "Attach a resume file before requesting Telegram approval.",
+      };
+    }
+
+    const attachment = await db.resumeAttachment.findFirst({
+      where: { id: resolvedAttachmentId, applicationId: application.id },
+    });
+    if (!attachment) {
+      return {
+        success: false,
+        error: "Attached resume not found. Upload it again.",
+      };
+    }
+
+    await db.telegramApprovalSession.updateMany({
+      where: {
+        userId: user.id,
+        applicationId,
+        status: { in: TELEGRAM_PENDING_STATUSES },
+      },
+      data: { status: "SUPERSEDED" },
+    });
+
+    const expiresAt = new Date(
+      Date.now() + Math.max(1, TELEGRAM_SESSION_TTL_HOURS) * 60 * 60 * 1000
+    );
+    const session = await db.telegramApprovalSession.create({
+      data: {
+        userId: user.id,
+        applicationId: application.id,
+        chatId: user.telegramChatId,
+        status: "PENDING",
+        recipientEmail: finalRecipientEmail,
+        attachmentId: resolvedAttachmentId,
+        resumeId: application.resumeId,
+        expiresAt,
+      },
+    });
+
+    const { subject, body } = extractEmailSubjectAndBody(
+      application.draftEmail,
+      application.job.title
+    );
+
+    const message = [
+      "<b>Draft Ready for Approval</b>",
+      "",
+      `<b>Role:</b> ${escapeTelegramHtml(application.job.title)}`,
+      `<b>Company:</b> ${escapeTelegramHtml(application.job.company)}`,
+      `<b>To:</b> ${escapeTelegramHtml(finalRecipientEmail)}`,
+      `<b>Resume:</b> ${escapeTelegramHtml(attachment.fileName)}`,
+      `<b>Profile:</b> ${escapeTelegramHtml(application.resume?.name || "Selected profile")}`,
+      "",
+      `<b>Subject</b>\n${escapeTelegramHtml(subject)}`,
+      "",
+      "<b>Draft Preview</b>",
+      escapeTelegramHtml(truncateTelegramText(body, 700)),
+      "",
+      "Approve to send now, or tap Ask Redraft and reply with what to change.",
+      `Session: ${escapeTelegramHtml(session.id)}`,
+    ].join("\n");
+
+    await sendTelegramMessage({
+      chatId: user.telegramChatId,
+      text: message,
+      parseMode: "HTML",
+      replyMarkup: buildTelegramApprovalKeyboard(session.id),
+    });
+
+    return {
+      success: true,
+      sessionId: session.id,
+      expiresAt: session.expiresAt,
+    };
+  } catch (error) {
+    console.error("[requestTelegramApproval] Error:", error);
+    return {
+      success: false,
+      error: error?.message || "Failed to send Telegram approval request.",
+    };
   }
 }
 
