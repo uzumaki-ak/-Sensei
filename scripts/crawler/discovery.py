@@ -6,6 +6,8 @@ from urllib.parse import quote_plus
 from engine import CrawlerEngine
 
 MAX_LINKS = 20
+MAX_LINKS_PER_SOURCE = 5
+MIN_SOURCES_BEFORE_EARLY_STOP = 4
 SEARCH_URLS = [
     "https://www.linkedin.com/jobs/search?keywords={query}",
     "https://www.indeed.com/jobs?q={query}",
@@ -32,19 +34,21 @@ class DiscoveryEngine:
         engine = CrawlerEngine(headless=True)
         encoded_query = quote_plus(query)
         all_links = []
+        sources_checked = 0
 
         for template in SEARCH_URLS:
             search_url = template.format(query=encoded_query)
             log(f"[DISCOVERY] Searching: {search_url}")
+            sources_checked += 1
 
             try:
                 result = await engine.scrape_url(search_url, self.extract_links)
                 links = result.get("discovered_urls", []) if result else []
-                all_links.extend(links)
+                all_links.extend(links[:MAX_LINKS_PER_SOURCE])
             except Exception as error:
                 log(f"[DISCOVERY] Failed source {search_url}: {error}")
 
-            if len(all_links) >= MAX_LINKS:
+            if len(all_links) >= MAX_LINKS and sources_checked >= MIN_SOURCES_BEFORE_EARLY_STOP:
                 break
 
         deduped = []

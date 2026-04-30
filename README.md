@@ -346,8 +346,11 @@ Create `.env` in project root.
 
 | Variable | Required | Notes |
 |---|---|---|
-| `INNGEST_API_KEY` | Optional/local-dev or cloud use | For Inngest Cloud usage |
+| `INNGEST_EVENT_KEY` | Optional | Needed if your app sends events to Inngest |
 | `INNGEST_SIGNING_KEY` | Optional/local-dev or cloud use | Webhook verification |
+| `NIGHTLY_JOB_HUNT_CRON` | Optional | Defaults to `TZ=Asia/Kolkata 0 0 * * *` |
+
+After each production deploy, ensure your app is synced in Inngest Cloud to your deployed `/api/inngest` endpoint (or install the Vercel Inngest integration for automatic sync).
 
 ### 10) Currently Reserved / Not Wired to Main Runtime Paths
 
@@ -426,8 +429,9 @@ HUNT_MAX_FALLBACK_PER_QUERY=8
 EVENT_TIMELINE_RETENTION_DAYS=2
 
 # Inngest
-INNGEST_API_KEY=
+INNGEST_EVENT_KEY=
 INNGEST_SIGNING_KEY=
+NIGHTLY_JOB_HUNT_CRON=TZ=Asia/Kolkata 0 0 * * *
 ```
 
 ## OAuth + Compliance Pages

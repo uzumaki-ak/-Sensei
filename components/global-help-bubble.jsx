@@ -18,6 +18,10 @@ const HELP_SUGGESTIONS = [
   "Based on my data, what are my strongest project stories for interviews?",
 ];
 
+const BUBBLE_POSITION_STORAGE_KEY = "global_help_bubble_position";
+const DRAG_MARGIN_PX = 8;
+const DRAG_THRESHOLD_PX = 6;
+
 export default function GlobalHelpBubble() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -27,8 +31,22 @@ export default function GlobalHelpBubble() {
   const [isSending, setIsSending] = useState(false);
   const [sessionId, setSessionId] = useState(null);
   const [warningText, setWarningText] = useState("");
+  const [position, setPosition] = useState(null);
   const sendLockRef = useRef(false);
   const scrollContainerRef = useRef(null);
+  const bubbleRootRef = useRef(null);
+  const suppressClickRef = useRef(false);
+  const dragStateRef = useRef({
+    active: false,
+    pointerId: null,
+    startPointerX: 0,
+    startPointerY: 0,
+    startX: 0,
+    startY: 0,
+    width: 0,
+    height: 0,
+    hasMoved: false,
+  });
 
   const hideOnRoute = useMemo(() => {
     if (!pathname) return false;
@@ -38,6 +56,7 @@ export default function GlobalHelpBubble() {
   useEffect(() => {
     const savedMessages = window.localStorage.getItem("global_help_chat_messages");
     const savedSessionId = window.localStorage.getItem("global_help_chat_session_id");
+    const savedPosition = window.localStorage.getItem(BUBBLE_POSITION_STORAGE_KEY);
     if (savedMessages) {
       try {
         const parsed = JSON.parse(savedMessages);
@@ -47,6 +66,20 @@ export default function GlobalHelpBubble() {
       }
     }
     if (savedSessionId) setSessionId(savedSessionId);
+    if (savedPosition) {
+      try {
+        const parsed = JSON.parse(savedPosition);
+        if (
+          parsed &&
+          Number.isFinite(parsed.x) &&
+          Number.isFinite(parsed.y)
+        ) {
+          setPosition({ x: parsed.x, y: parsed.y });
+        }
+      } catch {
+        // ignore invalid local cache
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -62,12 +95,133 @@ export default function GlobalHelpBubble() {
   }, [sessionId]);
 
   useEffect(() => {
+    if (position) {
+      window.localStorage.setItem(BUBBLE_POSITION_STORAGE_KEY, JSON.stringify(position));
+    } else {
+      window.localStorage.removeItem(BUBBLE_POSITION_STORAGE_KEY);
+    }
+  }, [position]);
+
+  useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
     container.scrollTop = container.scrollHeight;
   }, [messages, open]);
 
+  useEffect(() => {
+    if (!position) return;
+    const root = bubbleRootRef.current;
+    if (!root) return;
+
+    const clampWithinViewport = () => {
+      const rect = root.getBoundingClientRect();
+      const maxX = Math.max(DRAG_MARGIN_PX, window.innerWidth - rect.width - DRAG_MARGIN_PX);
+      const maxY = Math.max(DRAG_MARGIN_PX, window.innerHeight - rect.height - DRAG_MARGIN_PX);
+      const clampedX = Math.min(Math.max(position.x, DRAG_MARGIN_PX), maxX);
+      const clampedY = Math.min(Math.max(position.y, DRAG_MARGIN_PX), maxY);
+      if (clampedX !== position.x || clampedY !== position.y) {
+        setPosition({ x: clampedX, y: clampedY });
+      }
+    };
+
+    clampWithinViewport();
+    window.addEventListener("resize", clampWithinViewport);
+    return () => window.removeEventListener("resize", clampWithinViewport);
+  }, [position]);
+
   if (hideOnRoute) return null;
+
+  const clampPosition = (nextX, nextY, width, height) => {
+    const maxX = Math.max(DRAG_MARGIN_PX, window.innerWidth - width - DRAG_MARGIN_PX);
+    const maxY = Math.max(DRAG_MARGIN_PX, window.innerHeight - height - DRAG_MARGIN_PX);
+    return {
+      x: Math.min(Math.max(nextX, DRAG_MARGIN_PX), maxX),
+      y: Math.min(Math.max(nextY, DRAG_MARGIN_PX), maxY),
+    };
+  };
+
+  const beginDrag = (event) => {
+    if (!event.isPrimary) return;
+    const root = bubbleRootRef.current;
+    if (!root) return;
+
+    const rect = root.getBoundingClientRect();
+    const startPosition = position ?? { x: rect.left, y: rect.top };
+
+    if (!position) setPosition(startPosition);
+
+    dragStateRef.current = {
+      active: true,
+      pointerId: event.pointerId,
+      startPointerX: event.clientX,
+      startPointerY: event.clientY,
+      startX: startPosition.x,
+      startY: startPosition.y,
+      width: rect.width,
+      height: rect.height,
+      hasMoved: false,
+    };
+
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+
+  const updateDrag = (event) => {
+    const dragState = dragStateRef.current;
+    if (!dragState.active || dragState.pointerId !== event.pointerId) return;
+
+    const deltaX = event.clientX - dragState.startPointerX;
+    const deltaY = event.clientY - dragState.startPointerY;
+
+    if (!dragState.hasMoved && Math.hypot(deltaX, deltaY) >= DRAG_THRESHOLD_PX) {
+      dragState.hasMoved = true;
+    }
+
+    const next = clampPosition(
+      dragState.startX + deltaX,
+      dragState.startY + deltaY,
+      dragState.width,
+      dragState.height
+    );
+    setPosition(next);
+  };
+
+  const endDrag = (event) => {
+    const dragState = dragStateRef.current;
+    if (!dragState.active || dragState.pointerId !== event.pointerId) return;
+
+    if (dragState.hasMoved) {
+      suppressClickRef.current = true;
+      window.setTimeout(() => {
+        suppressClickRef.current = false;
+      }, 0);
+    }
+
+    dragStateRef.current = {
+      active: false,
+      pointerId: null,
+      startPointerX: 0,
+      startPointerY: 0,
+      startX: 0,
+      startY: 0,
+      width: 0,
+      height: 0,
+      hasMoved: false,
+    };
+
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+  };
+
+  const toggleBubble = () => {
+    if (suppressClickRef.current) return;
+    setOpen((current) => !current);
+    setHintVisible(false);
+  };
+
+  const openFromHint = () => {
+    if (suppressClickRef.current) return;
+    setOpen(true);
+    setHintVisible(false);
+  };
 
   const pushUserMessage = (content) => {
     const next = {
@@ -127,21 +281,26 @@ export default function GlobalHelpBubble() {
   };
 
   return (
-    <div className="fixed bottom-3 right-2 z-[70] sm:bottom-5 sm:right-5">
+    <div
+      ref={bubbleRootRef}
+      className={`fixed z-[70] ${position ? "" : "bottom-3 right-2 sm:bottom-5 sm:right-5"}`}
+      style={position ? { left: `${position.x}px`, top: `${position.y}px` } : undefined}
+    >
       {hintVisible ? (
         <button
           type="button"
-          className="mb-2 flex w-[min(340px,calc(100vw-1rem))] items-center gap-2 rounded-2xl border border-border/70 bg-background/95 px-2.5 py-2 text-left shadow-lg backdrop-blur sm:w-auto sm:gap-3 sm:px-3"
-          onClick={() => {
-            setOpen(true);
-            setHintVisible(false);
-          }}
+          className="mb-2 flex w-auto touch-none select-none items-center gap-2 rounded-2xl border border-border/70 bg-background/95 px-2.5 py-2 text-left shadow-lg backdrop-blur sm:gap-3 sm:px-3"
+          onClick={openFromHint}
+          onPointerDown={beginDrag}
+          onPointerMove={updateDrag}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
           title="Open quick help"
         >
           <div className="flex h-10 w-10 items-center justify-center rounded-full border border-border/70 bg-muted/40">
             <MessageCircleCode className="h-5 w-5" />
           </div>
-          <div className="rounded-xl border border-border/70 bg-background px-3 py-2 text-xs font-medium leading-5">
+          <div className="hidden rounded-xl border border-border/70 bg-background px-3 py-2 text-xs font-medium leading-5 sm:block">
             Having trouble? Ask me anything.
           </div>
         </button>
@@ -149,7 +308,13 @@ export default function GlobalHelpBubble() {
 
       {open ? (
         <div className="mb-2 w-[min(380px,calc(100vw-1rem))] rounded-sm border border-border/70 bg-background/95 p-3 shadow-lg backdrop-blur">
-          <div className="mb-2 flex items-center justify-between gap-2">
+          <div
+            className="mb-2 flex cursor-move touch-none select-none items-center justify-between gap-2"
+            onPointerDown={beginDrag}
+            onPointerMove={updateDrag}
+            onPointerUp={endDrag}
+            onPointerCancel={endDrag}
+          >
             <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               <Sparkles className="h-3.5 w-3.5" />
               Personal Copilot
@@ -261,11 +426,12 @@ export default function GlobalHelpBubble() {
       <Button
         type="button"
         size="icon"
-        className="h-12 w-12 rounded-full shadow-lg"
-        onClick={() => {
-          setOpen((current) => !current);
-          setHintVisible(false);
-        }}
+        className="h-12 w-12 touch-none rounded-full shadow-lg"
+        onClick={toggleBubble}
+        onPointerDown={beginDrag}
+        onPointerMove={updateDrag}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
         title="Toggle assistant bubble"
       >
         <MessageCircleCode className="h-5 w-5" />
