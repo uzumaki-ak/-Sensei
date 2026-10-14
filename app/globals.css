@@ -4,6 +4,12 @@
 
 @layer base {
   :root {
+    --font-body: "Inter";
+    --font-display: "Syne";
+    --font-serif-accent: "Cormorant Garamond";
+    --font-mono-tech: "IBM Plex Mono";
+    --font-ui: "Bricolage Grotesque";
+    --font-mono-label: "Geist Mono";
     --background: 38 31% 92%;
     --foreground: 0 0% 10%;
     --card: 42 24% 95%;
