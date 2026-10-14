@@ -2,14 +2,26 @@
 
 import { db } from "@/lib/prisma";
 import { auth } from "@clerk/nextjs/server";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { getModel, handleGeminiError } from "@/lib/gemini";
 import { revalidatePath } from "next/cache";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+const model = getModel();
 
 function cleanJsonResponse(text) {
   return text.replace(/```(?:json)?\n?/gi, "").replace(/```$/g, "").trim();
+}
+
+function assertResumeData(data) {
+  if (!data || typeof data !== "object" || Array.isArray(data) ||
+      !["name", "email", "summary"].every((key) => typeof data[key] === "string") ||
+      !["skills", "experience", "education", "projects", "certifications"].every((key) => Array.isArray(data[key])) ||
+      ![...data.skills, ...data.certifications].every((item) => typeof item === "string") ||
+      !data.experience.every((item) => item && typeof item === "object" && Array.isArray(item.bullets)) ||
+      !data.projects.every((item) => item && typeof item === "object" && Array.isArray(item.bullets)) ||
+      !data.education.every((item) => item && typeof item === "object")) {
+    throw new Error("AI returned an incomplete resume. Please try again.");
+  }
+  return data;
 }
 
 /**
@@ -67,6 +79,9 @@ Example: ["How did you implement [Tech from Job] in your last project?", "Can yo
     const result = await model.generateContent(prompt);
     const text = cleanJsonResponse(result.response.text());
     const questions = JSON.parse(text);
+    if (!Array.isArray(questions) || questions.length === 0 || questions.some((item) => typeof item !== "string" || !item.trim())) {
+      throw new Error("AI returned incomplete questions. Please try again.");
+    }
     return {
       questions,
       jobTitle: application.job.title,
@@ -76,7 +91,7 @@ Example: ["How did you implement [Tech from Job] in your last project?", "Can yo
     };
   } catch (error) {
     console.error("Error generating questions:", error);
-    throw new Error("Failed to generate resume questions");
+    throw new Error(error.message?.startsWith("AI returned") ? error.message : handleGeminiError(error));
   }
 }
 
@@ -126,6 +141,7 @@ INSTRUCTIONS:
 3. Prioritize skills and experience that match the job requirements
 4. Write 3-5 impactful bullet points per experience entry
 5. Include a compelling professional summary that connects the candidate to this role
+6. Never invent employment, education, projects, certifications, dates, or numbers. If the candidate did not provide a fact, leave it out or use an empty field.
 
 Return ONLY valid JSON with this exact structure:
 {
@@ -172,11 +188,11 @@ Return ONLY valid JSON with this exact structure:
   try {
     const result = await model.generateContent(prompt);
     const text = cleanJsonResponse(result.response.text());
-    const resumeData = JSON.parse(text);
+    const resumeData = assertResumeData(JSON.parse(text));
     return resumeData;
   } catch (error) {
     console.error("Error building resume:", error);
-    throw new Error("Failed to build resume from answers");
+    throw new Error(error.message?.startsWith("AI returned") ? error.message : handleGeminiError(error));
   }
 }
 
@@ -209,6 +225,7 @@ USER FEEDBACK:
 ${feedback}
 
 Apply the requested changes to the resume data. Keep the same JSON structure. Make sure the changes align with the target job requirements. If the user asks to add something, add it. If they ask to remove, remove it. If they ask to improve, rewrite with stronger language and metrics.
+Never invent metrics, employers, qualifications, or dates. Use only facts from the current resume and user feedback.
 
 Return ONLY the updated JSON in the exact same structure as the input. No markdown, no extra text.
 `;
@@ -216,11 +233,11 @@ Return ONLY the updated JSON in the exact same structure as the input. No markdo
   try {
     const result = await model.generateContent(prompt);
     const text = cleanJsonResponse(result.response.text());
-    const updatedData = JSON.parse(text);
+    const updatedData = assertResumeData(JSON.parse(text));
     return updatedData;
   } catch (error) {
     console.error("Error refining resume:", error);
-    throw new Error("Failed to refine resume");
+    throw new Error(error.message?.startsWith("AI returned") ? error.message : handleGeminiError(error));
   }
 }
 
@@ -234,18 +251,21 @@ export async function saveTailoredResume({ resumeData, jobApplicationId }) {
   const user = await db.user.findUnique({ where: { clerkUserId: userId } });
   if (!user) throw new Error("User not found");
 
-  // Include the user's photo URL if available
-  if (user.imageUrl && !resumeData.photoUrl) {
-    resumeData.photoUrl = user.imageUrl;
-  }
+  const validatedData = assertResumeData(resumeData);
 
   const application = await db.jobApplication.findFirst({
     where: { id: jobApplicationId, userId: user.id },
     include: { job: true },
   });
+  if (!application) throw new Error("Application not found.");
+
+  const finalData = {
+    ...validatedData,
+    photoUrl: validatedData.photoUrl || user.imageUrl || "",
+  };
 
   // Convert structured data to markdown for storage
-  const markdown = resumeDataToMarkdown(resumeData);
+  const markdown = resumeDataToMarkdown(finalData);
 
   const resume = await db.resume.create({
     data: {
@@ -254,8 +274,8 @@ export async function saveTailoredResume({ resumeData, jobApplicationId }) {
       type: application?.job?.title || "Custom",
       content: markdown,
       isDefault: false,
-      skills: resumeData.skills || [],
-      experience: resumeData.summary || "",
+      skills: finalData.skills,
+      experience: finalData.summary,
     },
   });
 

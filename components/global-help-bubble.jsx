@@ -22,6 +22,14 @@ const BUBBLE_POSITION_STORAGE_KEY = "global_help_bubble_position";
 const DRAG_MARGIN_PX = 8;
 const DRAG_THRESHOLD_PX = 6;
 
+function getMinX() {
+  if (window.innerWidth < 768 || document.documentElement.classList.contains("sidebar-collapsed")) {
+    return DRAG_MARGIN_PX;
+  }
+  const sidebar = document.querySelector(".app-sidebar");
+  return sidebar ? Math.ceil(sidebar.getBoundingClientRect().right) + DRAG_MARGIN_PX : DRAG_MARGIN_PX;
+}
+
 export default function GlobalHelpBubble() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -146,9 +154,10 @@ export default function GlobalHelpBubble() {
 
     const clampWithinViewport = () => {
       const rect = root.getBoundingClientRect();
-      const maxX = Math.max(DRAG_MARGIN_PX, window.innerWidth - rect.width - DRAG_MARGIN_PX);
+      const minX = getMinX();
+      const maxX = Math.max(minX, window.innerWidth - rect.width - DRAG_MARGIN_PX);
       const maxY = Math.max(DRAG_MARGIN_PX, window.innerHeight - rect.height - DRAG_MARGIN_PX);
-      const clampedX = Math.min(Math.max(position.x, DRAG_MARGIN_PX), maxX);
+      const clampedX = Math.min(Math.max(position.x, minX), maxX);
       const clampedY = Math.min(Math.max(position.y, DRAG_MARGIN_PX), maxY);
       if (clampedX !== position.x || clampedY !== position.y) {
         setPosition({ x: clampedX, y: clampedY });
@@ -157,16 +166,22 @@ export default function GlobalHelpBubble() {
 
     clampWithinViewport();
     window.addEventListener("resize", clampWithinViewport);
-    return () => window.removeEventListener("resize", clampWithinViewport);
-  }, [position]);
+    const observer = new MutationObserver(clampWithinViewport);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => {
+      window.removeEventListener("resize", clampWithinViewport);
+      observer.disconnect();
+    };
+  }, [position, open, hintVisible, hideOnRoute]);
 
   if (hideOnRoute) return null;
 
   const clampPosition = (nextX, nextY, width, height) => {
-    const maxX = Math.max(DRAG_MARGIN_PX, window.innerWidth - width - DRAG_MARGIN_PX);
+    const minX = getMinX();
+    const maxX = Math.max(minX, window.innerWidth - width - DRAG_MARGIN_PX);
     const maxY = Math.max(DRAG_MARGIN_PX, window.innerHeight - height - DRAG_MARGIN_PX);
     return {
-      x: Math.min(Math.max(nextX, DRAG_MARGIN_PX), maxX),
+      x: Math.min(Math.max(nextX, minX), maxX),
       y: Math.min(Math.max(nextY, DRAG_MARGIN_PX), maxY),
     };
   };
@@ -179,7 +194,7 @@ export default function GlobalHelpBubble() {
             "[data-no-drag='true'],button,a,input,textarea,select"
           )
         : null;
-    if (interactiveTarget) return;
+    if (interactiveTarget && interactiveTarget !== event.currentTarget) return;
     const root = bubbleRootRef.current;
     if (!root) return;
 
@@ -311,7 +326,7 @@ export default function GlobalHelpBubble() {
   return (
     <div
       ref={bubbleRootRef}
-      className={`fixed z-[40] ${position ? "" : "bottom-3 right-2 sm:bottom-5 sm:right-5"}`}
+      className={`fixed z-[55] ${position ? "" : "bottom-3 right-2 sm:bottom-5 sm:right-5"}`}
       style={position ? { left: `${position.x}px`, top: `${position.y}px` } : undefined}
     >
       {hintVisible ? (

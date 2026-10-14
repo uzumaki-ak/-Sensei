@@ -2,10 +2,9 @@
 
 import { db } from "@/lib/prisma";
 import { auth } from "@clerk/nextjs/server";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { getModel, handleGeminiError } from "@/lib/gemini";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+const model = getModel();
 
 export async function generateQuiz() {
   const { userId } = await auth();
@@ -44,20 +43,28 @@ export async function generateQuiz() {
   `;
 
   try {
-    const result = await model.generateContent(prompt);
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: { responseMimeType: "application/json" },
+    });
     const response = result.response;
     const text = response.text();
     const cleanedText = text.replace(/```(?:json)?\n?/g, "").trim();
     const quiz = JSON.parse(cleanedText);
 
+    if (!Array.isArray(quiz.questions) || quiz.questions.length === 0 ||
+        quiz.questions.some((question) => !Array.isArray(question.options) || question.options.length !== 4 || !question.options.includes(question.correctAnswer))) {
+      throw new Error("AI returned an incomplete quiz. Please try again.");
+    }
+
     return quiz.questions;
   } catch (error) {
     console.error("Error generating quiz:", error);
-    throw new Error("Failed to generate quiz questions");
+    throw new Error(error.message?.startsWith("AI returned") ? error.message : handleGeminiError(error));
   }
 }
 
-export async function saveQuizResult(questions, answers, score) {
+export async function saveQuizResult(questions, answers) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
@@ -74,6 +81,9 @@ export async function saveQuizResult(questions, answers, score) {
     isCorrect: q.correctAnswer === answers[index],
     explanation: q.explanation,
   }));
+  const score = questionResults.length > 0
+    ? (questionResults.filter((question) => question.isCorrect).length / questionResults.length) * 100
+    : 0;
 
   // Get wrong answers
   const wrongAnswers = questionResults.filter((q) => !q.isCorrect);
@@ -103,7 +113,6 @@ export async function saveQuizResult(questions, answers, score) {
       const tipResult = await model.generateContent(improvementPrompt);
 
       improvementTip = tipResult.response.text().trim();
-      console.log(improvementTip);
     } catch (error) {
       console.error("Error generating improvement tip:", error);
       // Continue without improvement tip if generation fails

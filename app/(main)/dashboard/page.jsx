@@ -12,8 +12,10 @@ export default async function DashboardPage() {
     redirect("/onboarding");
   }
 
-  const insights = await getIndustryInsights();
-  const activity = await getToolActivitySummary();
+  const [insights, activity] = await Promise.all([
+    getIndustryInsights(),
+    getToolActivitySummary(),
+  ]);
 
   return (
     <div className="container mx-auto">

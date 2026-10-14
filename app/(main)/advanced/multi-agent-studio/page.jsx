@@ -54,10 +54,23 @@ function pushRunCache(applicationId, run) {
 }
 
 function MarkdownPanel({ content, className = "text-sm" }) {
+  const readableContent = String(content || "No content").replace(/<br\s*\/?\s*>/gi, "; ");
   return (
-    <div className={`rounded-sm border border-border/70 bg-muted/20 p-3 ${className}`}>
-      <div className="prose prose-sm max-w-none dark:prose-invert">
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{content || "No content"}</ReactMarkdown>
+    <div className={`min-w-0 max-w-full overflow-hidden rounded-sm border border-border/70 bg-muted/20 p-3 ${className}`}>
+      <div className="prose prose-sm max-w-none break-words [overflow-wrap:anywhere] dark:prose-invert">
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          components={{
+            table: ({ children }) => (
+              <div className="my-3 max-w-full overflow-x-auto rounded-sm border border-border/70">
+                <table className="w-full min-w-[720px] border-collapse text-left">{children}</table>
+              </div>
+            ),
+            th: ({ children }) => <th className="min-w-32 border-b border-border/70 p-2 align-top">{children}</th>,
+            td: ({ children }) => <td className="min-w-32 border-b border-border/50 p-2 align-top [overflow-wrap:anywhere]">{children}</td>,
+            pre: ({ children }) => <pre className="max-w-full overflow-x-auto">{children}</pre>,
+          }}
+        >{readableContent}</ReactMarkdown>
       </div>
     </div>
   );
@@ -183,8 +196,8 @@ function MultiAgentStudioContent() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-12">
-        <div className="space-y-6 lg:col-span-4">
+      <div className="grid min-w-0 gap-6 lg:grid-cols-12">
+        <div className="min-w-0 space-y-6 lg:col-span-4">
           <Card>
             <CardHeader>
               <CardTitle>Run Setup</CardTitle>
@@ -276,7 +289,7 @@ function MultiAgentStudioContent() {
           </Card>
         </div>
 
-        <div className="space-y-4 lg:col-span-8">
+        <div className="min-w-0 space-y-4 lg:col-span-8">
           {activeRun ? (
             <>
               <Card>
@@ -289,8 +302,8 @@ function MultiAgentStudioContent() {
                 </CardContent>
               </Card>
 
-              <div className="grid gap-4 md:grid-cols-3">
-                <Card>
+              <div className="grid min-w-0 gap-4 2xl:grid-cols-3">
+                <Card className="min-w-0">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base">Researcher</CardTitle>
                   </CardHeader>
@@ -298,7 +311,7 @@ function MultiAgentStudioContent() {
                     <MarkdownPanel content={activeRun.researcherOutput} className="text-xs" />
                   </CardContent>
                 </Card>
-                <Card>
+                <Card className="min-w-0">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base">Planner</CardTitle>
                   </CardHeader>
@@ -306,7 +319,7 @@ function MultiAgentStudioContent() {
                     <MarkdownPanel content={activeRun.plannerOutput} className="text-xs" />
                   </CardContent>
                 </Card>
-                <Card>
+                <Card className="min-w-0">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base">Reviewer</CardTitle>
                   </CardHeader>

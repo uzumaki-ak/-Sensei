@@ -1,7 +1,11 @@
 "use client";
 
-import React from "react";
+import React, { useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { RefreshCw } from "lucide-react";
+import { refreshIndustryInsights } from "@/actions/dashboard";
 import {
   BarChart,
   Bar,
@@ -35,6 +39,19 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 
 const DashboardView = ({ insights, activity }) => {
+  const router = useRouter();
+  const [isRefreshing, startRefresh] = useTransition();
+  const handleRefresh = () => {
+    startRefresh(async () => {
+      try {
+        const result = await refreshIndustryInsights();
+        toast.success(result.refreshed ? "Insights refreshed." : "Insights were refreshed recently.");
+        router.refresh();
+      } catch (error) {
+        toast.error(error?.message || "Could not refresh insights. Please try again.");
+      }
+    });
+  };
   // Transform salary data for the chart
   const salaryData = insights.salaryRanges.map((range) => ({
     name: range.role,
@@ -78,14 +95,23 @@ const DashboardView = ({ insights, activity }) => {
     new Date(insights.nextUpdate),
     { addSuffix: true }
   );
+  const insightsOverdue = new Date(insights.nextUpdate).getTime() < Date.now();
 
   const totals = activity?.totals || {};
   const recentScorecards = activity?.recentScorecards || [];
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <Badge variant="outline">Last updated: {lastUpdatedDate}</Badge>
+      <div className="flex flex-wrap justify-between items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="outline">Last updated: {lastUpdatedDate}</Badge>
+          {insightsOverdue ? <Badge variant="destructive">Insights overdue - AI-generated estimates</Badge> : null}
+          {!insightsOverdue ? <Badge variant="outline">AI-generated estimates</Badge> : null}
+        </div>
+        <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefreshing}>
+          <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+          {isRefreshing ? "Refreshing..." : "Refresh insights"}
+        </Button>
       </div>
 
       {/* Activity Overview */}
@@ -213,8 +239,8 @@ const DashboardView = ({ insights, activity }) => {
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant={item.overallScore ? "default" : "outline"}>
-                    {item.overallScore ? `${item.overallScore}/100` : "Pending"}
+                  <Badge variant={item.overallScore !== null ? "default" : "outline"}>
+                    {item.overallScore !== null ? `${item.overallScore}/100` : "Pending"}
                   </Badge>
                   <Button asChild size="sm" variant="outline">
                     <Link href={`/meet/${item.code}`}>View</Link>

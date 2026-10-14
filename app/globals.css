@@ -374,9 +374,13 @@ html[data-route-key="meet"] {
 
   .gradient-title {
     @apply font-display pb-1 text-transparent;
-    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(190, 190, 190, 0.82) 100%);
+    background-image: linear-gradient(180deg, #171717 0%, #525252 100%);
     -webkit-background-clip: text;
     background-clip: text;
+  }
+
+  .dark .gradient-title {
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(190, 190, 190, 0.82) 100%);
   }
 
   .text-quiet {

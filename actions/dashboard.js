@@ -2,10 +2,10 @@
 
 import { db } from "@/lib/prisma";
 import { auth } from "@clerk/nextjs/server";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { getModel } from "@/lib/gemini";
+import { revalidatePath } from "next/cache";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+const model = getModel();
 
 export const generateAIInsights = async (industry) => {
   const prompt = `
@@ -28,13 +28,53 @@ export const generateAIInsights = async (industry) => {
           Include at least 5 skills and trends.
         `;
 
-  const result = await model.generateContent(prompt);
+  const result = await model.generateContent({
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    generationConfig: { responseMimeType: "application/json" },
+  });
   const response = result.response;
   const text = response.text();
   const cleanedText = text.replace(/```(?:json)?\n?/g, "").trim();
 
-  return JSON.parse(cleanedText);
+  const insights = JSON.parse(cleanedText);
+  const validRanges = Array.isArray(insights.salaryRanges) && insights.salaryRanges.every((range) =>
+    typeof range?.role === "string" && [range.min, range.max, range.median].every(Number.isFinite)
+  );
+  const validLists = ["topSkills", "keyTrends", "recommendedSkills"].every((key) =>
+    Array.isArray(insights[key]) && insights[key].every((item) => typeof item === "string")
+  );
+  if (!validRanges || !validLists || !Number.isFinite(insights.growthRate) ||
+      typeof insights.demandLevel !== "string" || typeof insights.marketOutlook !== "string") {
+    throw new Error("AI returned incomplete industry insights. Please try again.");
+  }
+  return insights;
 };
+
+export async function refreshIndustryInsights() {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Sign in to refresh insights.");
+
+  const user = await db.user.findUnique({
+    where: { clerkUserId: userId },
+    select: { industry: true },
+  });
+  if (!user?.industry) throw new Error("Set your industry in your profile first.");
+
+  const existing = await db.industryInsight.findUnique({ where: { industry: user.industry } });
+  if (existing && Date.now() - existing.lastUpdated.getTime() < 60 * 60 * 1000) {
+    return { refreshed: false };
+  }
+
+  const insights = await generateAIInsights(user.industry);
+  const now = new Date();
+  await db.industryInsight.upsert({
+    where: { industry: user.industry },
+    update: { ...insights, lastUpdated: now, nextUpdate: new Date(now.getTime() + 7 * 86400000) },
+    create: { industry: user.industry, ...insights, lastUpdated: now, nextUpdate: new Date(now.getTime() + 7 * 86400000) },
+  });
+  revalidatePath("/dashboard");
+  return { refreshed: true };
+}
 
 export async function getIndustryInsights() {
   const { userId } = await auth();
@@ -118,17 +158,18 @@ export async function getToolActivitySummary() {
       where: { ownerUserId: user.id, status: "COMPLETED" },
     }),
     db.interviewMeetRoom.count({
-      where: { ownerUserId: user.id, status: "COMPLETED" },
+      where: { ownerUserId: user.id, evaluatedAt: { not: null } },
     }),
     db.coverLetter.count({ where: { userId: user.id } }),
     db.resume.count({ where: { userId: user.id } }),
     db.resumeChat.count({ where: { userId: user.id } }),
     db.interviewMeetRoom.findMany({
-      where: { ownerUserId: user.id },
+      where: { ownerUserId: user.id, evaluatedAt: { not: null } },
       select: {
         id: true,
         code: true,
         status: true,
+        evaluation: true,
         createdAt: true,
         application: {
           select: {
@@ -154,7 +195,9 @@ export async function getToolActivitySummary() {
       createdAt: room.createdAt,
       company: room.application?.job?.company || "Unknown",
       role: room.application?.job?.title || "Unknown role",
-      overallScore: null,
+      overallScore: typeof room.evaluation?.overallScore === "number"
+        ? room.evaluation.overallScore
+        : null,
     };
   });
 

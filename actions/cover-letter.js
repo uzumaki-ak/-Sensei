@@ -2,10 +2,9 @@
 
 import { db } from "@/lib/prisma";
 import { auth } from "@clerk/nextjs/server";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { getModel, handleGeminiError } from "@/lib/gemini";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+const model = getModel();
 
 export async function generateCoverLetter(data) {
   const { userId } = await auth();
@@ -39,6 +38,7 @@ export async function generateCoverLetter(data) {
     5. Use proper business letter formatting in markdown
     6. Include specific examples of achievements
     7. Relate candidate's background to job requirements
+    8. Use only achievements supported by the candidate information. Do not invent employers, projects, or metrics.
     
     Format the letter in markdown.
   `;
@@ -61,7 +61,7 @@ export async function generateCoverLetter(data) {
     return coverLetter;
   } catch (error) {
     console.error("Error generating cover letter:", error.message);
-    throw new Error("Failed to generate cover letter");
+    throw new Error(handleGeminiError(error));
   }
 }
 

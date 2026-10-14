@@ -351,6 +351,7 @@ Create `.env` in project root.
 | `NIGHTLY_JOB_HUNT_CRON` | Optional | Defaults to `TZ=Asia/Kolkata 0 0 * * *` |
 
 After each production deploy, ensure your app is synced in Inngest Cloud to your deployed `/api/inngest` endpoint (or install the Vercel Inngest integration for automatic sync).
+The dashboard marks overdue industry insights and lets a signed-in user refresh them manually. A daily job-hunt email confirms the hunt schedule only; check the separate weekly `generate-industry-insights` run in Inngest to verify industry updates.
 
 ### 10) Currently Reserved / Not Wired to Main Runtime Paths
 
@@ -370,9 +371,10 @@ NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
 
 # AI text providers
 GEMINI_API_KEY=
+GEMINI_TEXT_MODEL=gemini-3.1-flash-lite
 GOOGLE_GEMINI_API_KEY=
 GOOGLE_GEMINI_BASE_URL=
-GOOGLE_GEMINI_MODELS=
+GOOGLE_GEMINI_MODELS=gemini-3.1-flash-lite,gemini-2.5-flash-lite
 OPENROUTER_API_KEY=
 OPENROUTER_BASE_URL=
 OPENROUTER_MODELS=
@@ -383,7 +385,7 @@ GROQ_MODELS=
 EURON_API_KEY=
 EURON_BASE_URL=
 EURON_MODELS=
-MODEL_PROVIDER_ORDER=google,openrouter,groq,euron
+MODEL_PROVIDER_ORDER=google,euron,groq,openrouter
 AI_TEXT_TIMEOUT_MS=25000
 AI_TEXT_MAX_ATTEMPTS=8
 
@@ -393,7 +395,7 @@ EURON_EMBEDDING_BASE_URL=
 EURON_EMBEDDING_MODELS=text-embedding-3-small
 GROQ_EMBEDDING_BASE_URL=
 GROQ_EMBEDDING_MODELS=text-embedding-3-small
-GOOGLE_GEMINI_EMBEDDING_MODELS=text-embedding-004
+GOOGLE_GEMINI_EMBEDDING_MODELS=gemini-embedding-2
 AI_EMBED_TIMEOUT_MS=15000
 AI_EMBED_MAX_ATTEMPTS=6
 

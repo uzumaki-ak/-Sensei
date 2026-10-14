@@ -132,14 +132,8 @@ export async function ingestRagContext(applicationId, options = {}) {
       throw new Error("Nothing to ingest. Add job/resume/notes.");
     }
 
-    await db.ragKnowledgeChunk.deleteMany({
-      where: {
-        userId: internalUserId,
-        applicationId,
-      },
-    });
-
-    let createdCount = 0;
+    const pendingChunks = [];
+    let selectedEmbedding = null;
     const trace = [];
 
     for (const source of sourceDocuments) {
@@ -148,32 +142,37 @@ export async function ingestRagContext(applicationId, options = {}) {
         const chunkText = chunks[index];
         const embed = await createEmbeddingWithFallback(chunkText, {
           timeoutMs: 12000,
-          maxAttempts: 3,
+          maxAttempts: selectedEmbedding ? 1 : 3,
+          provider: selectedEmbedding?.provider,
+          model: selectedEmbedding?.model,
         });
+        selectedEmbedding ??= { provider: embed.provider, model: embed.model };
         trace.push(...embed.trace);
 
-        await db.ragKnowledgeChunk.create({
-          data: {
-            userId: internalUserId,
-            applicationId,
-            sourceType: source.sourceType,
-            sourceLabel: source.sourceLabel,
-            chunkText,
-            embedding: embed.embedding,
-            metadata: {
-              provider: embed.provider,
-              model: embed.model,
-              chunkIndex: index + 1,
-            },
+        pendingChunks.push({
+          userId: internalUserId,
+          applicationId,
+          sourceType: source.sourceType,
+          sourceLabel: source.sourceLabel,
+          chunkText,
+          embedding: embed.embedding,
+          metadata: {
+            provider: embed.provider,
+            model: embed.model,
+            chunkIndex: index + 1,
           },
         });
-        createdCount += 1;
       }
     }
 
+    await db.$transaction([
+      db.ragKnowledgeChunk.deleteMany({ where: { userId: internalUserId, applicationId } }),
+      db.ragKnowledgeChunk.createMany({ data: pendingChunks }),
+    ]);
+
     return {
       success: true,
-      chunksCreated: createdCount,
+      chunksCreated: pendingChunks.length,
       sourceCount: sourceDocuments.length,
       trace,
     };
@@ -221,11 +220,26 @@ export async function askRagQuestion(applicationId, question) {
       throw new Error("No context embedded yet. Run 'Ingest Context' first.");
     }
 
+    const embeddingSource = chunks.find((chunk) => chunk.metadata?.provider && chunk.metadata?.model);
+    if (!embeddingSource) {
+      throw new Error("This RAG context uses an older embedding format. Re-ingest context before asking a question.");
+    }
+    const embeddingProvider = embeddingSource.metadata.provider;
+    const embeddingModel = embeddingSource.metadata.model;
+    if (embeddingModel === "text-embedding-004") {
+      throw new Error("This RAG context uses a retired embedding model. Re-ingest context before asking a question.");
+    }
+    const compatibleChunks = chunks.filter((chunk) =>
+      chunk.metadata?.provider === embeddingProvider && chunk.metadata?.model === embeddingModel
+    );
+
     const queryEmbed = await createEmbeddingWithFallback(cleanQuestion, {
       timeoutMs: 12000,
-      maxAttempts: 3,
+      maxAttempts: 1,
+      provider: embeddingProvider,
+      model: embeddingModel,
     });
-    const ranked = chunks
+    const ranked = compatibleChunks
       .map((chunk, idx) => {
         const score = cosineSimilarity(queryEmbed.embedding, chunk.embedding);
         return {
